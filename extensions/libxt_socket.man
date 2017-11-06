@@ -4,7 +4,7 @@ socket (possibly with a non\-local address). The lookup is performed using
 the \fBpacket\fP tuple of TCP/UDP packets, or the original TCP/UDP header
 \fBembedded\fP in an ICMP/ICPMv6 error packet.
 .TP
-\fB\-\-transparent\fP
+[\fB!\fP] \fB\-\-transparent\fP
 Ignore non-transparent sockets.
 .TP
 \fB\-\-nowildcard\fP
@@ -16,21 +16,143 @@ forwarded to redirect such packets to local machine with policy routing.
 When using the socket match to implement fully transparent
 proxies bound to non\-local addresses it is recommended to use the \-\-transparent
 option instead.
-.PP
-Example (assuming packets with mark 1 are delivered locally):
-.IP
-\-t mangle \-A PREROUTING \-m socket \-\-transparent \-j MARK \-\-set\-mark 1
 .TP
 \fB\-\-restore\-skmark\fP
 Set the packet mark to the matching socket's mark. Can be combined with the
 \fB\-\-transparent\fP and \fB\-\-nowildcard\fP options to restrict the sockets
 to be matched when restoring the packet mark.
+.TP
+\fB\-\-invert\fP
+Invert sense of the match. Instead of matching packets for which socket lookup
+succeeded, it matches packets that don't.
+.TP
+[\fB!\fP] \fB\-\-state\fP \fIstatelist\fP
+Matches if socket is in one of the given states. Valid state depends on the protocol.
+For UDP, due to it's connectionless nature only TCP_ESTABLISHED may be
+used and only on sockets that use \fBconnect\fP(2) before sending data.
+Possible socket states are listed below.
+.TP
+[\fB!\fP] \fB\-\-user\fP \fIusername\fP
+.TP
+[\fB!\fP] \fB\-\-user\fP \fIuserid\fP[\fB-\fP\fIuserid\fP]
+Matches if socket has associated file structure with and it is owned by the
+given user. Specifying numerical UID or UID range is also supported.
+.TP
+[\fB!\fP] \fB\-\-group\fP \fIgroupname\fP
+.TP
+[\fB!\fP] \fB\-\-group\fP \fIgroupid\fP[\fB-\fP\fIgroupid\fP]
+Matches if socket has associated file structure with and it is owned by the
+given group. Specifying numerical GID or GID range is also supported.
 .PP
-Example: An application opens 2 transparent (\fBIP_TRANSPARENT\fP) sockets and
+States for \fB--state\fP:
+.TP
+\fBNEW\fP
+Match TCP_LISTEN, TCP_SYN_SENT and TCP_SYN_RECV states.
+.TP
+\fBESTABLISHED\fP
+Match TCP_ESTABLISHED state.
+.TP
+\fBCLOSING\fP
+Match TCP_FIN_WAIT1, TCP_FIN_WAIT2, TCP_TIME_WAIT, TCP_CLOSE, TCP_CLOSE_WAIT,
+TCP_LAST_ACK and TCP_CLOSING states.
+.TP
+\fBANY\fP
+Match any socket state (which is default if \fB\-\-state\fP option is not given).
+.PP
+Also socket state could be matched individually with any combination of the states:
+.TP
+\fBTCP_ESTABLISHED\fP
+The socket has an established connection.
+.TP
+\fBTCP_SYN_SENT\fP
+The socket is actively attempting to establish a connection.
+.TP
+\fBTCP_SYN_RECV\fP
+A connection request has been received from the network.
+.TP
+\fBTCP_FIN_WAIT1\fP
+The socket is closed, and the connection is shutting down.
+.TP
+\fBTCP_FIN_WAIT2\fP
+Connection is closed, and the socket is waiting for a shutdown from the remote end.
+.TP
+\fBTCP_TIME_WAIT\fP
+The socket is waiting after close to handle packets still in the network.
+.TP
+\fBTCP_CLOSE\fP
+The socket is not being used.
+.TP
+\fBTCP_CLOSE_WAIT\fP
+The remote end has shut down, waiting for the socket to close.
+.TP
+\fBTCP_LAST_ACK\fP
+The remote end has shut down, and the socket is closed. Waiting for acknowledgement.
+.TP
+\fBTCP_LISTEN\fP
+The  socket  is  listening for incoming connections.
+.TP
+\fBTCP_CLOSING\fP
+While connection shut down is performed remote peer also requests shut down.
+.PP
+Example 1: Assuming packets with mark 1 are delivered locally:
+.IP
+\-t mangle \-A PREROUTING \-m socket \-\-transparent \-j MARK \-\-set\-mark 1
+.PP
+Example 2: An application opens 2 transparent (\fBIP_TRANSPARENT\fP) sockets and
 sets a mark on them with \fBSO_MARK\fP socket option. We can filter matching packets:
 .IP
 \-t mangle \-I PREROUTING \-m socket \-\-transparent \-\-restore-skmark \-j action
-.IP
+.br
 \-t mangle \-A action \-m mark \-\-mark 10 \-j action2
-.IP
+.br
 \-t mangle \-A action \-m mark \-\-mark 11 \-j action3
+.PP
+Example 3: How to divert non\-locally destined packets to port 80 on local
+transparent non zero\-bound listener. Match against non zero\-bound listeners
+will not happen for non\-diverted packets, so use \-\-invert option to match
+and divert packets on connection startup, however this step is optional and
+match may be omitted. Mark packets with mark 10 and route them locally with
+iproute2. Matching socket against state \fBCLOSING\fP allows to match last
+packets in situations where connection closed locally, and sockets file
+structure is gone, therefore checking credentials is not possible (see
+\fB\-\-user\fP, \fB\-\-group\fP option  description). However socket is still
+exists and has one of the state described by \fBCLOSING\fP alias. Last rule
+is required to allow diverted packets to input when rules in  \fBINPUT\fP
+chain would drop it overwise.
+.IP
+ip route add local default dev lo table 10
+.br
+ip rule add pref 10 fwmark 10 table 10
+
+.br
+-t mangle -N DIVERT
+.br
+-t mangle -A DIVERT -j SET --set-mark 10
+.br
+-t mangle -A DIVERT -j ACCEPT
+
+.br
+-t mangle -A PREROUTING -m socket --transparent --state ESTABLISHED --user nobody -j DIVERT
+.br
+-t mangle -A PREROUTING -m socket --transparent --state CLOSING -j DIVERT
+
+.br
+-t mangle -A PREROUTING -p tcp --destination-port 80 -m socket --invert --nowildcard
+-j TPROXY --on-ip 192.0.2.1 --on-port 80 --tproxy-mark 10
+
+.br
+-t filter -A INPUT -m mark --mark 10 -j ACCEPT
+.PP
+Example 4: How to match packets from 192.168.1.0/24 against local zero\-bound
+listener on port 80, owned by root user. This is useful in local packet
+filtering setups without conntrack support. Last rule is required to match end
+of the session, where sockets file structure might not be available (e.g.
+process owning listener terminates, and connection shuts down from our local
+side). Note, that option \-\-nowildcard is not required for last rule, as
+socket is not zero\-bound listener after connection establishment.
+.IP
+-t filter -A INPUT -s 192.168.1.0/24 -p tcp --destination-port 80 -m socket
+--state NEW,ESTABLISHED --nowildcard --user root --group root -j ACCEPT
+.br
+-t filter -A INPUT -s 192.168.1.0/24 -p tcp --destination-port 80 -m socket
+--state CLOSING -j ACCEPT
