@@ -3,78 +3,108 @@
 #include <linux/netfilter/xt_rpfilter.h>
 
 enum {
-	O_RPF_LOOSE = 0,
-	O_RPF_VMARK = 1,
-	O_RPF_ACCEPT_LOCAL = 2,
-	O_RPF_INVERT = 3,
+	O_LOOSE = 0,
+	O_VMARK,
+	O_ACCEPT_LOCAL,
+	O_INVERT,
+};
+
+static const struct xt_option_entry rpfilter_opts[] = {
+	[O_LOOSE] = {
+		.name	= "loose",
+		.id	= O_LOOSE,
+		.type	= XTTYPE_NONE,
+	},
+	[O_VMARK] = {
+		.name	= "validmark",
+		.id	= O_VMARK,
+		.type	= XTTYPE_NONE,
+	},
+	[O_ACCEPT_LOCAL] = {
+		.name	= "accept-local",
+		.id	= O_ACCEPT_LOCAL,
+		.type	= XTTYPE_NONE,
+	},
+	[O_INVERT] = {
+		.name	= "invert",
+		.id	= O_INVERT,
+		.type	= XTTYPE_NONE,
+	},
+	XTOPT_TABLEEND,
 };
 
 static void rpfilter_help(void)
 {
 	printf(
 "rpfilter match options:\n"
-"    --loose          permit reverse path via any interface\n"
-"    --validmark      use skb nfmark when performing route lookup\n"
-"    --accept-local   do not reject packets with a local source address\n"
-"    --invert         match packets that failed the reverse path test\n"
+"    --loose                  permit reverse path via any interface\n"
+"    --validmark              use skb nfmark when performing route lookup\n"
+"    --accept-local           do not reject packets with a local source address\n"
+"    --invert                 match packets that failed the reverse path test\n"
 	);
 }
-
-static const struct xt_option_entry rpfilter_opts[] = {
-	{.name = "loose", .id = O_RPF_LOOSE, .type = XTTYPE_NONE, },
-	{.name = "validmark", .id = O_RPF_VMARK, .type = XTTYPE_NONE, },
-	{.name = "accept-local", .id = O_RPF_ACCEPT_LOCAL, .type = XTTYPE_NONE, },
-	{.name = "invert", .id = O_RPF_INVERT, .type = XTTYPE_NONE, },
-	XTOPT_TABLEEND,
-};
 
 static void rpfilter_parse(struct xt_option_call *cb)
 {
 	struct xt_rpfilter_info *rpfinfo = cb->data;
+	const unsigned int revision = (*cb->match)->u.user.revision;
+	unsigned int id, flags;
 
 	xtables_option_parse(cb);
-	switch (cb->entry->id) {
-	case O_RPF_LOOSE:
-		rpfinfo->flags |= XT_RPFILTER_LOOSE;
+	id = cb->entry->id;
+
+	switch (id) {
+	case O_LOOSE:
+		flags = XT_RPFILTER_LOOSE;
 		break;
-	case O_RPF_VMARK:
-		rpfinfo->flags |= XT_RPFILTER_VALID_MARK;
+	case O_VMARK:
+		flags = XT_RPFILTER_VALID_MARK;
 		break;
-	case O_RPF_ACCEPT_LOCAL:
-		rpfinfo->flags |= XT_RPFILTER_ACCEPT_LOCAL;
+	case O_ACCEPT_LOCAL:
+		flags = XT_RPFILTER_ACCEPT_LOCAL;
 		break;
-	case O_RPF_INVERT:
-		rpfinfo->flags |= XT_RPFILTER_INVERT;
+	case O_INVERT:
+		flags = XT_RPFILTER_INVERT;
 		break;
+	default:
+		xtables_error(PARAMETER_PROBLEM,
+			      "libxt_rpfilter.%u does not support --%s",
+			      revision,
+			      rpfilter_opts[id].name);
 	}
+
+	rpfinfo->flags |= flags;
 }
 
 static void
-rpfilter_print_prefix(const void *ip, const void *matchinfo,
-			const char *prefix)
+rpfilter_show(const char *pfx, unsigned int flags)
 {
-	const struct xt_rpfilter_info *info = matchinfo;
-	if (info->flags & XT_RPFILTER_LOOSE)
-		printf(" %s%s", prefix, rpfilter_opts[O_RPF_LOOSE].name);
-	if (info->flags & XT_RPFILTER_VALID_MARK)
-		printf(" %s%s", prefix, rpfilter_opts[O_RPF_VMARK].name);
-	if (info->flags & XT_RPFILTER_ACCEPT_LOCAL)
-		printf(" %s%s", prefix, rpfilter_opts[O_RPF_ACCEPT_LOCAL].name);
-	if (info->flags & XT_RPFILTER_INVERT)
-		printf(" %s%s", prefix, rpfilter_opts[O_RPF_INVERT].name);
+	if (flags & XT_RPFILTER_LOOSE)
+		printf(" %s%s", pfx, rpfilter_opts[O_LOOSE].name);
+	if (flags & XT_RPFILTER_VALID_MARK)
+		printf(" %s%s", pfx, rpfilter_opts[O_VMARK].name);
+	if (flags & XT_RPFILTER_ACCEPT_LOCAL)
+		printf(" %s%s", pfx, rpfilter_opts[O_ACCEPT_LOCAL].name);
+	if (flags & XT_RPFILTER_INVERT)
+		printf(" %s%s", pfx, rpfilter_opts[O_INVERT].name);
 }
 
-
 static void
-rpfilter_print(const void *ip, const struct xt_entry_match *match, int numeric)
+rpfilter_print(const void *ip, const struct xt_entry_match *match,
+	       int numeric)
 {
+	const struct xt_rpfilter_info *info = (const void *) match->data;
+
 	printf(" rpfilter");
-	return rpfilter_print_prefix(ip, match->data, "");
+	rpfilter_show("", info->flags);
 }
 
-static void rpfilter_save(const void *ip, const struct xt_entry_match *match)
+static void
+rpfilter_save(const void *ip, const struct xt_entry_match *match)
 {
-	return rpfilter_print_prefix(ip, match->data, "--");
+	const struct xt_rpfilter_info *info = (const void *) match->data;
+
+	rpfilter_show("--", info->flags);
 }
 
 static int rpfilter_xlate(struct xt_xlate *xl,
