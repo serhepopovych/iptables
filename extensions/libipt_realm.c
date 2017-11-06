@@ -29,8 +29,8 @@ static const struct xt_option_entry realm_opts[] = {
 };
 
 static const char f_realms[] = "/etc/iproute2/rt_realms";
-/* array of realms from f_realms[] */
-static struct xtables_lmap *realms;
+/* map of realms from f_realms[] */
+static struct xtables_lmap_table *realms;
 
 static void realm_parse(struct xt_option_call *cb)
 {
@@ -81,7 +81,7 @@ print_realm_xlate(unsigned long id, unsigned long mask,
 			   op == XT_OP_EQ ? "==" : "!=", id);
 	else {
 		if (numeric == 0)
-			name = xtables_lmap_id2name(realms, id);
+			name = xtables_lmap_id2name(id, realms);
 		if (name)
 			xt_xlate_add(xl, " %s%s",
 				   op == XT_OP_EQ ? "" : "!= ", name);
@@ -122,7 +122,7 @@ static struct xtables_match realm_mt_reg = {
 
 void _init(void)
 {
-	realms = xtables_lmap_init(f_realms);
+	realms = xtables_lmap_fromfile(f_realms, XTABLES_LMAP_SHIFT);
 	if (realms == NULL && errno != ENOENT)
 		fprintf(stderr, "Warning: %s: %s\n", f_realms,
 			strerror(errno));

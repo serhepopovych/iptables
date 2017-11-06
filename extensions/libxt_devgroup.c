@@ -32,8 +32,8 @@ static const struct xt_option_entry devgroup_opts[] = {
 };
 
 static const char f_devgroups[] = "/etc/iproute2/group";
-/* array of devgroups from f_devgroups[] */
-static struct xtables_lmap *devgroups;
+/* map of devgroups from f_devgroups[] */
+static struct xtables_lmap_table *devgroups;
 
 static void devgroup_parse(struct xt_option_call *cb)
 {
@@ -115,7 +115,7 @@ print_devgroup_xlate(unsigned int id, uint32_t op,  unsigned int mask,
 			   op == XT_OP_EQ ? "==" : "!=", id);
 	else {
 		if (numeric == 0)
-			name = xtables_lmap_id2name(devgroups, id);
+			name = xtables_lmap_id2name(id, devgroups);
 
 		xt_xlate_add(xl, "%s", op == XT_OP_EQ ? "" : "!= ");
 		if (name)
@@ -176,7 +176,7 @@ static struct xtables_match devgroup_mt_reg = {
 
 void _init(void)
 {
-	devgroups = xtables_lmap_init(f_devgroups);
+	devgroups = xtables_lmap_fromfile(f_devgroups, XTABLES_LMAP_SHIFT);
 	if (devgroups == NULL && errno != ENOENT)
 		fprintf(stderr, "Warning: %s: %s\n", f_devgroups,
 			strerror(errno));

@@ -2117,7 +2117,7 @@ void xtables_print_mac_and_mask(const unsigned char *mac, const unsigned char *m
 
 void xtables_parse_val_mask(struct xt_option_call *cb,
 			    unsigned int *val, unsigned int *mask,
-			    const struct xtables_lmap *lmap)
+			    const struct xtables_lmap_table *lmap)
 {
 	char *end;
 
@@ -2159,7 +2159,7 @@ bad_val:
 			cb->ext_name, cb->entry->name);
 
 name2val:
-	*val = xtables_lmap_name2id(lmap, cb->arg);
+	*val = xtables_lmap_name2id(cb->arg, lmap);
 	if ((int)*val == -1)
 		xt_params->exit_err(PARAMETER_PROBLEM,
 			"%s: could not map name %s to an integer value "
@@ -2168,7 +2168,7 @@ name2val:
 }
 
 void xtables_print_val_mask(unsigned int val, unsigned int mask,
-			    const struct xtables_lmap *lmap)
+			    const struct xtables_lmap_table *lmap)
 {
 	if (mask != ~0U) {
 		printf(" 0x%x/0x%x", val, mask);
@@ -2176,7 +2176,7 @@ void xtables_print_val_mask(unsigned int val, unsigned int mask,
 	}
 
 	if (lmap) {
-		const char *name = xtables_lmap_id2name(lmap, val);
+		const char *name = xtables_lmap_id2name(val, lmap);
 
 		if (name) {
 			printf(" %s", name);

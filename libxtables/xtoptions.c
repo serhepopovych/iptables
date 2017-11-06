@@ -1088,28 +1088,162 @@ void xtables_option_mfcall(struct xtables_match *m)
 		xtables_options_fcheck(m->name, m->mflags, m->x6_options);
 }
 
-struct xtables_lmap *xtables_lmap_init(const char *file)
-{
-	struct xtables_lmap *lmap_head = NULL, *lmap_prev = NULL, *lmap_this;
-	char buf[512];
-	FILE *fp;
-	char *cur, *nxt;
-	int id;
+/**
+ * Generic hash table implementation.
+ *
+ * Mostly used by "linear" mapping routines.
+ */
 
-	fp = fopen(file, "re");
-	if (fp == NULL)
+static void xtables_hash_init(struct hlist_head *head, unsigned int h_shift)
+{
+	unsigned int i, n;
+
+	n = 1 << h_shift;
+
+	for (i = 0; i < n; i++)
+		INIT_HLIST_HEAD(&head[i]);
+}
+
+struct hlist_head *xtables_hash_alloc(unsigned int h_shift)
+{
+	struct hlist_head *head;
+	unsigned int n;
+
+	if (!h_shift)
 		return NULL;
 
+	n = 1 << h_shift;
+
+	head = malloc(n * sizeof(*head));
+	if (head)
+		xtables_hash_init(head, h_shift);
+	return head;
+}
+
+void xtables_hash_free(struct hlist_head *head, unsigned int h_shift,
+		       xtables_hash_flush_cb_t flush_cb,
+		       size_t offset)
+{
+	if (head) {
+		xtables_hash_flush(head, h_shift, flush_cb, offset);
+		free(head);
+	}
+}
+
+void xtables_hash_flush(struct hlist_head *h, unsigned int h_shift,
+			xtables_hash_flush_cb_t flush_callback,
+			size_t offset)
+{
+	unsigned int i, n;
+
+	n = 1 << h_shift;
+
+	for (i = 0; i < n; i++) {
+		struct hlist_head *head = &h[i];
+		struct hlist_node *node, *tmp;
+
+		hlist_for_each_safe(node, tmp, head) {
+			hlist_del(node);
+			flush_callback(node, offset);
+		}
+
+		INIT_HLIST_HEAD(head);
+	}
+}
+
+/**
+ * "Linear" mapping of name/value.
+ *
+ * Mostly used for reading iproute2 data files.
+ */
+
+static void xtables_lmap_flush_cb(struct hlist_node *node, size_t offset)
+{
+	struct xtables_lmap *lmap = (void *) node - offset;
+
+	free(lmap->name);
+	free(lmap);
+}
+
+struct xtables_lmap_table *xtables_lmap_alloc(unsigned int h_shift)
+{
+	struct xtables_lmap_table *tbl;
+
+	tbl = malloc(sizeof(*tbl));
+	if (!tbl)
+		goto err;
+
+	tbl->h_id = xtables_hash_alloc(h_shift);
+	if (!tbl->h_id)
+		goto err_free_tbl;
+
+	tbl->h_name = xtables_hash_alloc(h_shift);
+	if (!tbl->h_name)
+		goto err_free_h_id;
+
+	tbl->h_shift = h_shift;
+
+	return tbl;
+
+err_free_h_id:
+	free(tbl->h_id);
+err_free_tbl:
+	free(tbl);
+err:
+	return NULL;
+}
+
+void xtables_lmap_free(struct xtables_lmap_table *tbl)
+{
+	if (tbl) {
+		size_t offset = offsetof(struct xtables_lmap, id_hlist);
+
+		xtables_hash_free(tbl->h_id, tbl->h_shift,
+				  xtables_lmap_flush_cb, offset);
+		/* List freed, free hash table */
+		free(tbl->h_name);
+		free(tbl);
+	}
+}
+
+void xtables_lmap_flush(struct xtables_lmap_table *tbl)
+{
+	size_t offset = offsetof(struct xtables_lmap, id_hlist);
+
+	xtables_hash_flush(tbl->h_id, tbl->h_shift,
+			   xtables_lmap_flush_cb, offset);
+	/* List freed and h_id inited, init h_name */
+	xtables_hash_init(tbl->h_name, tbl->h_shift);
+}
+
+int xtables_lmap_load(const char *file, struct xtables_lmap_table *tbl)
+{
+	char buf[512];
+	FILE *fp;
+
+	fp = fopen(file, "re");
+	if (!fp)
+		goto err;
+
 	while (fgets(buf, sizeof(buf), fp) != NULL) {
-		cur = buf;
+		struct xtables_lmap *lmap;
+		char *cur = buf;
+		char *nxt;
+		int id, base;
+		unsigned int hash;
+
 		while (isspace(*cur))
 			++cur;
 		if (*cur == '#' || *cur == '\n' || *cur == '\0')
 			continue;
 
 		/* iproute2 allows hex and dec format */
+		if (cur[0] == '0' && (cur[1] == 'x' || cur[1] == 'X'))
+			base = 16;
+		else
+			base = 10;
 		errno = 0;
-		id = strtoul(cur, &nxt, strncmp(cur, "0x", 2) == 0 ? 16 : 10);
+		id = strtoul(cur, &nxt, base);
 		if (nxt == cur || errno != 0)
 			continue;
 
@@ -1132,57 +1266,76 @@ struct xtables_lmap *xtables_lmap_init(const char *file)
 		*nxt = '\0';
 
 		/* found valid data */
-		lmap_this = malloc(sizeof(*lmap_this));
-		if (lmap_this == NULL) {
-			perror("malloc");
-			goto out;
+		lmap = malloc(sizeof(*lmap));
+		if (!lmap)
+			goto err_fclose;
+		lmap->id   = id;
+		lmap->name = strdup(cur);
+		if (!lmap->name) {
+			free(lmap);
+			goto err_fclose;
 		}
-		lmap_this->id   = id;
-		lmap_this->name = strdup(cur);
-		if (lmap_this->name == NULL) {
-			free(lmap_this);
-			goto out;
-		}
-		lmap_this->next = NULL;
 
-		if (lmap_prev != NULL)
-			lmap_prev->next = lmap_this;
-		else
-			lmap_head = lmap_this;
-		lmap_prev = lmap_this;
+		hash = xtables_hash_name(lmap->name, tbl->h_shift);
+		hlist_add_head(&lmap->name_hlist, &tbl->h_name[hash]);
+
+		hash = xtables_hash_id(lmap->id, tbl->h_shift);
+		hlist_add_head(&lmap->id_hlist, &tbl->h_id[hash]);
 	}
 
 	fclose(fp);
-	return lmap_head;
- out:
+	return 0;
+
+err_fclose:
 	fclose(fp);
-	xtables_lmap_free(lmap_head);
-	return NULL;
-}
-
-void xtables_lmap_free(struct xtables_lmap *head)
-{
-	struct xtables_lmap *next;
-
-	for (; head != NULL; head = next) {
-		next = head->next;
-		free(head->name);
-		free(head);
-	}
-}
-
-int xtables_lmap_name2id(const struct xtables_lmap *head, const char *name)
-{
-	for (; head != NULL; head = head->next)
-		if (strcmp(head->name, name) == 0)
-			return head->id;
+err:
 	return -1;
 }
 
-const char *xtables_lmap_id2name(const struct xtables_lmap *head, int id)
+struct xtables_lmap_table *xtables_lmap_fromfile(const char *file,
+						 unsigned int h_shift)
 {
-	for (; head != NULL; head = head->next)
-		if (head->id == id)
-			return head->name;
+	struct xtables_lmap_table *tbl;
+
+	tbl = xtables_lmap_alloc(h_shift);
+	if (!tbl)
+		goto err;
+
+	if (xtables_lmap_load(file, tbl) < 0) {
+		xtables_lmap_free(tbl);
+		tbl = NULL;
+		goto err;
+	}
+err:
+	return tbl;
+}
+
+int xtables_lmap_name2id(const char *name, const struct xtables_lmap_table *tbl)
+{
+	unsigned int hash = xtables_hash_name(name, tbl->h_shift);
+	struct hlist_head *head = &tbl->h_name[hash];
+	struct hlist_node *node;
+	struct xtables_lmap *lmap;
+
+	hlist_for_each_entry(lmap, node, head, name_hlist) {
+		if (!strcmp(lmap->name, name))
+			return lmap->id;
+	}
+
+	return -1;
+}
+
+const char *xtables_lmap_id2name(int id, const struct xtables_lmap_table *tbl)
+{
+	unsigned int hash = xtables_hash_id(id, tbl->h_shift);
+	struct hlist_head *head = &tbl->h_id[hash];
+	struct hlist_node *node;
+	struct xtables_lmap *lmap;
+
+	hlist_for_each_entry(lmap, node, head, id_hlist) {
+		if (lmap->id == id)
+			return lmap->name;
+	}
+
 	return NULL;
 }

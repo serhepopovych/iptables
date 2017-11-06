@@ -50,8 +50,8 @@ static const struct xt_option_entry rpfilter_opts[] = {
 };
 
 static const char f_devgroups[] = "/etc/iproute2/group";
-/* array of devgroups from f_devgroups[] */
-static struct xtables_lmap *devgroups;
+/* map of devgroups from f_devgroups[] */
+static struct xtables_lmap_table *devgroups;
 
 static void rpfilter_help(void)
 {
@@ -243,7 +243,7 @@ static struct xtables_match rpfilter_mt_reg[] = {
 
 void _init(void)
 {
-	devgroups = xtables_lmap_init(f_devgroups);
+	devgroups = xtables_lmap_fromfile(f_devgroups, XTABLES_LMAP_SHIFT);
 	if (devgroups == NULL && errno != ENOENT)
 		fprintf(stderr, "Warning: %s: %s\n", f_devgroups,
 			strerror(errno));

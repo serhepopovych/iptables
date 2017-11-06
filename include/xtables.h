@@ -12,9 +12,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include <netinet/in.h>
 #include <net/if.h>
+
 #include <linux/types.h>
+#include <linux/hash.h>
+#include <linux/list.h>
 #include <linux/netfilter.h>
 #include <linux/netfilter/x_tables.h>
 
@@ -196,9 +200,10 @@ struct xt_fcheck_call {
  * /etc/iproute2/.
  */
 struct xtables_lmap {
-	char *name;
+	struct hlist_node id_hlist;
+	struct hlist_node name_hlist;
 	int id;
-	struct xtables_lmap *next;
+	char *name;
 };
 
 enum xtables_ext_flags {
@@ -560,9 +565,11 @@ extern void xtables_print_mac(const unsigned char *macaddress);
 extern void xtables_print_mac_and_mask(const unsigned char *mac,
 				       const unsigned char *mask);
 
+struct xtables_lmap_table;
+
 extern void xtables_parse_val_mask(struct xt_option_call *cb,
 				   unsigned int *val, unsigned int *mask,
-				   const struct xtables_lmap *lmap);
+				   const struct xtables_lmap_table *lmap);
 
 static inline void xtables_parse_mark_mask(struct xt_option_call *cb,
 					   unsigned int *mark,
@@ -572,7 +579,7 @@ static inline void xtables_parse_mark_mask(struct xt_option_call *cb,
 }
 
 extern void xtables_print_val_mask(unsigned int val, unsigned int mask,
-				   const struct xtables_lmap *lmap);
+				   const struct xtables_lmap_table *lmap);
 
 static inline void xtables_print_mark_mask(unsigned int mark,
 					   unsigned int mask)
@@ -619,10 +626,51 @@ extern void xtables_option_mfcall(struct xtables_match *);
 extern void xtables_options_fcheck(const char *, unsigned int,
 				   const struct xt_option_entry *);
 
-extern struct xtables_lmap *xtables_lmap_init(const char *);
-extern void xtables_lmap_free(struct xtables_lmap *);
-extern int xtables_lmap_name2id(const struct xtables_lmap *, const char *);
-extern const char *xtables_lmap_id2name(const struct xtables_lmap *, int);
+#define XTABLES_LMAP_SHIFT	8
+#define XTABLES_LMAP_ENTRIES	(1 << XTABLES_LMAP_SHIFT)
+
+struct xtables_lmap_table {
+	struct hlist_head *h_id;
+	struct hlist_head *h_name;
+	unsigned int h_shift;
+};
+
+static inline unsigned int xtables_hash_name(const char *name,
+					      unsigned int h_shift)
+{
+	unsigned int hash = full_name_hash((const unsigned char *) name,
+					    strlen(name));
+	return hash_32(hash, h_shift);
+}
+
+static inline unsigned int xtables_hash_id(int id,
+					    unsigned int h_shift)
+{
+	return hash_32(id, h_shift);
+}
+
+typedef void (xtables_hash_flush_cb_t)(struct hlist_node *, size_t);
+
+extern struct hlist_head *xtables_hash_alloc(unsigned int h_shift);
+extern void xtables_hash_free(struct hlist_head *head, unsigned int h_shift,
+			      xtables_hash_flush_cb_t flush_cb,
+			      size_t offset);
+extern void xtables_hash_flush(struct hlist_head *h, unsigned int h_shift,
+			       xtables_hash_flush_cb_t flush_callback,
+			       size_t offset);
+
+extern struct xtables_lmap_table *xtables_lmap_alloc(unsigned int h_shift);
+extern void xtables_lmap_free(struct xtables_lmap_table *tbl);
+extern void xtables_lmap_flush(struct xtables_lmap_table *tbl);
+
+extern int xtables_lmap_load(const char *file, struct xtables_lmap_table *tbl);
+extern struct xtables_lmap_table *xtables_lmap_fromfile(const char *file,
+							unsigned int h_shift);
+
+extern int xtables_lmap_name2id(const char *name,
+				const struct xtables_lmap_table *tbl);
+extern const char *xtables_lmap_id2name(int id,
+					const struct xtables_lmap_table *tbl);
 
 /* xlate infrastructure */
 struct xt_xlate *xt_xlate_alloc(int size);
