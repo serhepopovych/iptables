@@ -84,7 +84,10 @@ struct ipt_ip {
 /* Values for "flag" field in struct ipt_ip (general ip structure). */
 #define IPT_F_FRAG		0x01	/* Set if rule is a fragment rule */
 #define IPT_F_GOTO		0x02	/* Set if jump is a goto */
-#define IPT_F_MASK		0x03	/* All possible flag bits mask. */
+#define IPT_F_NF_ACCEPT		0x04	/* Accept if target has no verdict */
+#define IPT_F_NF_DROP		0x08	/* Drop if target has no verdict */
+#define IPT_F_NF_MASK		0x0c	/* Rule verdict mask */
+#define IPT_F_MASK		0x0f	/* All possible flag bits mask. */
 
 /* Values for "inv" field in struct ipt_ip. */
 #define IPT_INV_VIA_IN		0x01	/* Invert the sense of IN IFACE. */

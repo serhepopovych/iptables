@@ -29,6 +29,7 @@ enum {
 	OPT_VIANAMEOUT  = 1 << 8,
 	OPT_LINENUMBERS = 1 << 9,
 	OPT_COUNTERS    = 1 << 10,
+	OPT_ACTION      = 1 << 11,
 };
 
 struct xtables_globals;

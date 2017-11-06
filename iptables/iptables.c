@@ -27,6 +27,7 @@
 #include "config.h"
 #include <getopt.h>
 #include <string.h>
+#include <strings.h>
 #include <netdb.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -68,10 +69,10 @@
 static const char cmdflags[] = { 'I', 'D', 'D', 'R', 'A', 'L', 'F', 'Z',
 				 'N', 'X', 'P', 'E', 'S', 'Z', 'C' };
 
-#define OPT_FRAGMENT    0x00800U
+#define OPT_FRAGMENT    0x01000U
 #define NUMBER_OF_OPT	ARRAY_SIZE(optflags)
 static const char optflags[]
-= { 'n', 's', 'd', 'p', 'j', 'v', 'x', 'i', 'o', '0', 'c', 'f'};
+= { 'n', 's', 'd', 'p', 'j', 'v', 'x', 'i', 'o', '0', 'c', 'a', 'f' };
 
 static const char unsupported_rev[] = " [unsupported revision]";
 
@@ -113,6 +114,7 @@ static struct option original_opts[] = {
 	{.name = "goto",          .has_arg = 1, .val = 'g'},
 	{.name = "ipv4",          .has_arg = 0, .val = '4'},
 	{.name = "ipv6",          .has_arg = 0, .val = '6'},
+	{.name = "action",        .has_arg = 1, .val = 'a'},
 	{NULL},
 };
 
@@ -138,22 +140,22 @@ struct xtables_globals iptables_globals = {
 static const char commands_v_options[NUMBER_OF_CMD][NUMBER_OF_OPT] =
 /* Well, it's better than "Re: Linux vs FreeBSD" */
 {
-	/*     -n  -s  -d  -p  -j  -v  -x  -i  -o --line -c -f */
-/*INSERT*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' '},
-/*DELETE*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x',' '},
-/*DELETE_NUM*/{'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*REPLACE*/   {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' '},
-/*APPEND*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' '},
-/*LIST*/      {' ','x','x','x','x',' ',' ','x','x',' ','x','x'},
-/*FLUSH*/     {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*ZERO*/      {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*NEW_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*DEL_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*SET_POLICY*/{'x','x','x','x','x',' ','x','x','x','x',' ','x'},
-/*RENAME*/    {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*LIST_RULES*/{'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*ZERO_NUM*/  {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*CHECK*/     {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x',' '},
+	/*     -n  -s  -d  -p  -j  -v  -x  -i  -o --line -c -a -f */
+/*INSERT*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' ',' '},
+/*DELETE*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x',' ',' '},
+/*DELETE_NUM*/{'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*REPLACE*/   {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' ',' '},
+/*APPEND*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' ',' '},
+/*LIST*/      {' ','x','x','x','x',' ',' ','x','x',' ','x','x','x'},
+/*FLUSH*/     {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*ZERO*/      {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*NEW_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*DEL_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*SET_POLICY*/{'x','x','x','x','x',' ','x','x','x','x',' ','x','x'},
+/*RENAME*/    {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*LIST_RULES*/{'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*ZERO_NUM*/  {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*CHECK*/     {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x',' ',' '},
 };
 
 static const int inverse_for_options[NUMBER_OF_OPT] =
@@ -169,6 +171,7 @@ static const int inverse_for_options[NUMBER_OF_OPT] =
 /* -o */ IPT_INV_VIA_OUT,
 /*--line*/ 0,
 /* -c */ 0,
+/* -a */ 0,
 /* -f */ IPT_INV_FRAG,
 };
 
@@ -262,6 +265,9 @@ exit_printhelp(const struct xtables_rule_match *matches)
 "  --line-numbers		print line numbers when listing\n"
 "  --exact	-x		expand numbers (display exact values)\n"
 "[!] --fragment	-f		match second or further fragments only\n"
+"  --action	-a <accept|drop>\n"
+"				ACCEPT or DROP packet when target does not\n"
+"				explicitly define verdict for packet\n"
 "  --modprobe=<command>		try to insert modules using this command\n"
 "  --set-counters PKTS BYTES	set the counter during insert/append\n"
 "[!] --version	-V		print package version.\n");
@@ -514,6 +520,7 @@ print_firewall(const struct ipt_entry *fw,
 	struct xtables_target *target, *tg;
 	const struct xt_entry_target *t;
 	uint8_t flags;
+	char buf[BUFSIZ];
 
 	if (!iptc_is_chain(targname, handle))
 		target = xtables_find_target(targname, XTF_TRY_LOAD);
@@ -547,9 +554,19 @@ print_firewall(const struct ipt_entry *fw,
 	if (format & FMT_OPTIONS) {
 		if (format & FMT_NOTABLE)
 			fputs("opt ", stdout);
-		fputc(fw->ip.invflags & IPT_INV_FRAG ? '!' : '-', stdout);
-		fputc(flags & IPT_F_FRAG ? 'f' : '-', stdout);
-		fputc(' ', stdout);
+		buf[0] = buf[1] = buf[2] = '-';
+		buf[3] = ' ';
+		buf[4] = '\0';
+		if (flags & IPT_F_FRAG) {
+			if (fw->ip.invflags & IPT_INV_FRAG)
+				buf[0] = '!';
+			buf[1] = 'f';
+		}
+		if (flags & IPT_F_NF_ACCEPT)
+			buf[2] = 'a';
+		else if (flags & IPT_F_NF_DROP)
+			buf[2] = 'd';
+		fputs(buf, stdout);
 	}
 
 	print_ifaces(fw->ip.iniface, fw->ip.outiface, fw->ip.invflags, format);
@@ -560,7 +577,7 @@ print_firewall(const struct ipt_entry *fw,
 		fputs("  ", stdout);
 
 #ifdef IPT_F_GOTO
-	if(fw->ip.flags & IPT_F_GOTO)
+	if(flags & IPT_F_GOTO)
 		printf("[goto] ");
 #endif
 
@@ -1026,7 +1043,7 @@ void print_rule4(const struct ipt_entry *e,
 		struct xtc_handle *h, const char *chain, int counters)
 {
 	const struct xt_entry_target *t;
-	const char *target_name;
+	const char *target_name, *action;
 
 	/* print counters for iptables-save */
 	if (counters > 0)
@@ -1053,6 +1070,16 @@ void print_rule4(const struct ipt_entry *e,
 	if (e->ip.flags & IPT_F_FRAG)
 		printf("%s -f",
 		       e->ip.invflags & IPT_INV_FRAG ? " !" : "");
+
+	if (e->ip.flags & IPT_F_NF_ACCEPT)
+		action = "accept";
+	else if (e->ip.flags & IPT_F_NF_DROP)
+		action = "drop";
+	else
+		action = NULL;
+
+	if (action)
+		printf("-a %s", action);
 
 	/* Print matchinfo part */
 	if (e->target_offset)
@@ -1238,7 +1265,7 @@ int do_command4(int argc, char *argv[], char **table,
 	opterr = 0;
 	opts = xt_params->orig_opts;
 	while ((cs.c = getopt_long(argc, argv,
-	   "-:A:C:D:R:I:L::S::M:F::Z::N:X::E:P:Vh::o:p:s:d:j:i:fbvw::W::nt:m:xc:g:46",
+	   "-:A:C:D:R:I:L::S::M:F::Z::N:X::E:P:Vh::o:p:s:d:j:i:fbvw::W::nt:m:xc:g:46a:",
 					   opts, NULL)) != -1) {
 		switch (cs.c) {
 			/*
@@ -1454,6 +1481,20 @@ int do_command4(int argc, char *argv[], char **table,
 			set_option(&cs.options, OPT_FRAGMENT, &cs.fw.ip.invflags,
 				   cs.invert);
 			cs.fw.ip.flags |= IPT_F_FRAG;
+			break;
+
+		case 'a':
+			set_option(&cs.options, OPT_ACTION, &cs.fw.ip.invflags,
+				   cs.invert);
+
+			if (!strcasecmp(optarg, "accept"))
+				cs.fw.ip.flags |= IPT_F_NF_ACCEPT;
+			else if (!strcasecmp(optarg, "drop"))
+				cs.fw.ip.flags |= IPT_F_NF_DROP;
+			else
+				xtables_error(PARAMETER_PROBLEM,
+					"Unknown --action \"%s\" argument",
+					optarg);
 			break;
 
 		case 'v':
@@ -1683,9 +1724,7 @@ int do_command4(int argc, char *argv[], char **table,
 				"Warning: using chain %s, not extension\n",
 				cs.jumpto);
 
-			if (cs.target->t)
-				free(cs.target->t);
-
+			free(cs.target->t);
 			cs.target = NULL;
 		}
 
@@ -1695,6 +1734,14 @@ int do_command4(int argc, char *argv[], char **table,
 			cs.target = xtables_find_target(XT_STANDARD_TARGET,
 							XTF_LOAD_MUST_SUCCEED);
 			xs_init_target(cs.target, cs.jumpto, is_chain);
+		}
+
+		if (!cs.target || !strcmp(cs.target->name, "standard")) {
+			/* -a not valid without extension target */
+			if (cs.options & OPT_ACTION)
+				xtables_error(PARAMETER_PROBLEM,
+					   "Can't specify --action for "
+					   "non-extension targets");
 		}
 
 		if (!cs.target) {
