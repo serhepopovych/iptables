@@ -1,5 +1,27 @@
-This module allows you to set the skb\->priority value (and thus classify the packet into a specific CBQ class).
+This module allows you to set/modify the skb\->priority value (and thus classify the
+packet into a specific class of qdisc).
 .TP
-\fB\-\-set\-class\fP \fImajor\fP\fB:\fP\fIminor\fP
-Set the major and minor class value. The values are always interpreted as
-hexadecimal even if no 0x prefix is given.
+\fB\-\-set\-class\fP \fImajor\fP\fB:\fP\fIminor\fP or \fIvalue\fP[\fB/\fP\fImask\fP]
+Two form of arguments are supported at the moment. The first one
+uses the major and minor class to set value. Values are always
+interpreted as hexadecimal even if no 0x prefix is given. The second one
+zeroes out the bits given by \fImask\fP and ORs \fIvalue\fP into the basis
+priority. If \fImask\fP is omitted, 0xFFFFFFFF is assumed.
+.TP
+\fB\-\-set\-xclass\fP \fIvalue\fP[\fB/\fP\fImask\fP]
+Zeroes out the bits given by \fImask\fP and XORs \fIvalue\fP into the basis
+priority. If \fImask\fP is omitted, 0xFFFFFFFF is assumed.
+.PP
+The following mnemonics are available:
+.TP
+\fB\-\-and\-class\fP \fIbits\fP
+Binary AND the basis priority with \fIbits\fP. (Mnemonic for \fB\-\-set\-xclass
+0/\fP\fIinvbits\fP, where \fIinvbits\fP is the binary negation of \fIbits\fP.)
+.TP
+\fB\-\-or\-class\fP \fIbits\fP
+Binary OR the basis priority with \fIbits\fP. (Mnemonic for \fB\-\-set\-xclass\fP
+\fIbits\fP\fB/\fP\fIbits\fP.)
+.TP
+\fB\-\-xor\-class\fP \fIbits\fP
+Binary XOR the basis priority with \fIbits\fP. (Mnemonic for \fB\-\-set\-xclass\fP
+\fIbits\fP\fB/0\fP.)
