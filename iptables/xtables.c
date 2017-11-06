@@ -27,6 +27,7 @@
 #include "config.h"
 #include <getopt.h>
 #include <string.h>
+#include <strings.h>
 #include <netdb.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -43,10 +44,10 @@
 #include "nft-shared.h"
 #include "nft.h"
 
-#define OPT_FRAGMENT	0x00800U
+#define OPT_FRAGMENT	0x01000U
 #define NUMBER_OF_OPT	ARRAY_SIZE(optflags)
 static const char optflags[]
-= { 'n', 's', 'd', 'p', 'j', 'v', 'x', 'i', 'o', '0', 'c', 'f'};
+= { 'n', 's', 'd', 'p', 'j', 'v', 'x', 'i', 'o', '0', 'c', 'a', 'f' };
 
 static struct option original_opts[] = {
 	{.name = "append",	  .has_arg = 1, .val = 'A'},
@@ -86,6 +87,7 @@ static struct option original_opts[] = {
 	{.name = "goto",	  .has_arg = 1, .val = 'g'},
 	{.name = "ipv4",	  .has_arg = 0, .val = '4'},
 	{.name = "ipv6",	  .has_arg = 0, .val = '6'},
+	{.name = "action",	  .has_arg = 1, .val = 'a'},
 	{NULL},
 };
 
@@ -111,22 +113,22 @@ struct xtables_globals xtables_globals = {
 static const char commands_v_options[NUMBER_OF_CMD][NUMBER_OF_OPT] =
 /* Well, it's better than "Re: Linux vs FreeBSD" */
 {
-	/*     -n  -s  -d  -p  -j  -v  -x  -i  -o --line -c -f */
-/*INSERT*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' '},
-/*DELETE*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x',' '},
-/*DELETE_NUM*/{'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*REPLACE*/   {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' '},
-/*APPEND*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' '},
-/*LIST*/      {' ','x','x','x','x',' ',' ','x','x',' ','x','x'},
-/*FLUSH*/     {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*ZERO*/      {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*ZERO_NUM*/  {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*NEW_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*DEL_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*SET_POLICY*/{'x','x','x','x','x',' ','x','x','x','x',' ','x'},
-/*RENAME*/    {'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*LIST_RULES*/{'x','x','x','x','x',' ','x','x','x','x','x','x'},
-/*CHECK*/     {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x',' '},
+	/*     -n  -s  -d  -p  -j  -v  -x  -i  -o --line -c -a -f */
+/*INSERT*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' ',' '},
+/*DELETE*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x',' ',' '},
+/*DELETE_NUM*/{'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*REPLACE*/   {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' ',' '},
+/*APPEND*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' ',' '},
+/*LIST*/      {' ','x','x','x','x',' ',' ','x','x',' ','x','x','x'},
+/*FLUSH*/     {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*ZERO*/      {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*ZERO_NUM*/  {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*NEW_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*DEL_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*SET_POLICY*/{'x','x','x','x','x',' ','x','x','x','x',' ','x','x'},
+/*RENAME*/    {'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*LIST_RULES*/{'x','x','x','x','x',' ','x','x','x','x','x','x','x'},
+/*CHECK*/     {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x',' ',' '},
 };
 
 static const int inverse_for_options[NUMBER_OF_OPT] =
@@ -142,6 +144,7 @@ static const int inverse_for_options[NUMBER_OF_OPT] =
 /* -o */ IPT_INV_VIA_OUT,
 /*--line*/ 0,
 /* -c */ 0,
+/* -a */ 0,
 /* -f */ IPT_INV_FRAG,
 };
 
@@ -235,6 +238,9 @@ exit_printhelp(const struct xtables_rule_match *matches)
 "  --line-numbers		print line numbers when listing\n"
 "  --exact	-x		expand numbers (display exact values)\n"
 "[!] --fragment	-f		match second or further fragments only\n"
+"  --action	-a <accept|drop>\n"
+"				ACCEPT or DROP packet when target does not\n"
+"				explicitly define verdict for packet\n"
 "  --modprobe=<command>		try to insert modules using this command\n"
 "  --set-counters PKTS BYTES	set the counter during insert/append\n"
 "[!] --version	-V		print package version.\n");
@@ -577,7 +583,7 @@ void do_parse(struct nft_handle *h, int argc, char *argv[],
 
 	opts = xt_params->orig_opts;
 	while ((cs->c = getopt_long(argc, argv,
-	   "-:A:C:D:R:I:L::S::M:F::Z::N:X::E:P:Vh::o:p:s:d:j:i:fbvw::W::nt:m:xc:g:46",
+	   "-:A:C:D:R:I:L::S::M:F::Z::N:X::E:P:Vh::o:p:s:d:j:i:fbvw::W::nt:m:xc:g:46a:",
 					   opts, NULL)) != -1) {
 		switch (cs->c) {
 			/*
@@ -814,6 +820,25 @@ void do_parse(struct nft_handle *h, int argc, char *argv[],
 			set_option(&cs->options, OPT_FRAGMENT, &args->invflags,
 				   cs->invert);
 			args->flags |= IPT_F_FRAG;
+			break;
+
+		case 'a':
+			set_option(&cs.options, OPT_ACTION, &args.invflags,
+				   cs.invert);
+
+			if (!strcasecmp(optarg, "accept")) {
+				args.flags |= (args.family == AF_INET) ?
+						IPT_F_NF_ACCEPT :
+						IP6T_F_NF_ACCEPT;
+			} else if (!strcasecmp(optarg, "drop")) {
+				args.flags |= (args.family == AF_INET) ?
+						IPT_F_NF_DROP :
+						IP6T_F_NF_DROP;
+			} else {
+				xtables_error(PARAMETER_PROBLEM,
+					"Unknown --action \"%s\" argument\n",
+					optarg);
+			}
 			break;
 
 		case 'v':

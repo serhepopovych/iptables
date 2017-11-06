@@ -36,6 +36,8 @@ enum {
 	OPT_OPCODE	= 1 << 14,
 	OPT_H_TYPE	= 1 << 15,
 	OPT_P_TYPE	= 1 << 16,
+	/* below is for default action */
+	OPT_ACTION      = 1 << 17,
 };
 
 enum {

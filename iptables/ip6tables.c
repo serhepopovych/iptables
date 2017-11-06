@@ -27,6 +27,7 @@
 #include "config.h"
 #include <getopt.h>
 #include <string.h>
+#include <strings.h>
 #include <netdb.h>
 #include <errno.h>
 #include <stdio.h>
@@ -47,7 +48,7 @@
 
 #define NUMBER_OF_OPT	ARRAY_SIZE(optflags)
 static const char optflags[]
-= { 'n', 's', 'd', 'p', 'j', 'v', 'x', 'i', 'o', '0', 'c'};
+= { 'n', 's', 'd', 'p', 'j', 'v', 'x', 'i', 'o', '0', 'c', 'a' };
 
 static const char unsupported_rev[] = " [unsupported revision]";
 
@@ -88,6 +89,7 @@ static struct option original_opts[] = {
 	{.name = "goto",          .has_arg = 1, .val = 'g'},
 	{.name = "ipv4",          .has_arg = 0, .val = '4'},
 	{.name = "ipv6",          .has_arg = 0, .val = '6'},
+	{.name = "action",        .has_arg = 1, .val = 'a'},
 	{NULL},
 };
 
@@ -112,22 +114,22 @@ struct xtables_globals ip6tables_globals = {
 static const char commands_v_options[NUMBER_OF_CMD][NUMBER_OF_OPT] =
 /* Well, it's better than "Re: Linux vs FreeBSD" */
 {
-	/*     -n  -s  -d  -p  -j  -v  -x  -i  -o --line -c */
-/*INSERT*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' '},
-/*DELETE*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x'},
-/*DELETE_NUM*/{'x','x','x','x','x',' ','x','x','x','x','x'},
-/*REPLACE*/   {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' '},
-/*APPEND*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' '},
-/*LIST*/      {' ','x','x','x','x',' ',' ','x','x',' ','x'},
-/*FLUSH*/     {'x','x','x','x','x',' ','x','x','x','x','x'},
-/*ZERO*/      {'x','x','x','x','x',' ','x','x','x','x','x'},
-/*NEW_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x'},
-/*DEL_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x'},
-/*SET_POLICY*/{'x','x','x','x','x',' ','x','x','x','x',' '},
-/*RENAME*/    {'x','x','x','x','x',' ','x','x','x','x','x'},
-/*LIST_RULES*/{'x','x','x','x','x',' ','x','x','x','x','x'},
-/*ZERO_NUM*/  {'x','x','x','x','x',' ','x','x','x','x','x'},
-/*CHECK*/     {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x'},
+	/*     -n  -s  -d  -p  -j  -v  -x  -i  -o --line -c -a */
+/*INSERT*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' '},
+/*DELETE*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x',' '},
+/*DELETE_NUM*/{'x','x','x','x','x',' ','x','x','x','x','x','x'},
+/*REPLACE*/   {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' '},
+/*APPEND*/    {'x',' ',' ',' ',' ',' ','x',' ',' ','x',' ',' '},
+/*LIST*/      {' ','x','x','x','x',' ',' ','x','x',' ','x','x'},
+/*FLUSH*/     {'x','x','x','x','x',' ','x','x','x','x','x','x'},
+/*ZERO*/      {'x','x','x','x','x',' ','x','x','x','x','x','x'},
+/*NEW_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x','x'},
+/*DEL_CHAIN*/ {'x','x','x','x','x',' ','x','x','x','x','x','x'},
+/*SET_POLICY*/{'x','x','x','x','x',' ','x','x','x','x',' ','x'},
+/*RENAME*/    {'x','x','x','x','x',' ','x','x','x','x','x','x'},
+/*LIST_RULES*/{'x','x','x','x','x',' ','x','x','x','x','x','x'},
+/*ZERO_NUM*/  {'x','x','x','x','x',' ','x','x','x','x','x','x'},
+/*CHECK*/     {'x',' ',' ',' ',' ',' ','x',' ',' ','x','x',' '},
 };
 
 static const unsigned int inverse_for_options[NUMBER_OF_OPT] =
@@ -143,6 +145,7 @@ static const unsigned int inverse_for_options[NUMBER_OF_OPT] =
 /* -o */ IP6T_INV_VIA_OUT,
 /*--line*/ 0,
 /* -c */ 0,
+/* -a */ 0,
 };
 
 #define opts ip6tables_globals.opts
@@ -236,6 +239,9 @@ exit_printhelp(const struct xtables_rule_match *matches)
 "  --line-numbers		print line numbers when listing\n"
 "  --exact	-x		expand numbers (display exact values)\n"
 /*"[!] --fragment	-f		match second or further fragments only\n"*/
+"  --action	-a <accept|drop>\n"
+"				ACCEPT or DROP packet when target does not\n"
+"				explicitly define verdict for packet\n"
 "  --modprobe=<command>		try to insert modules using this command\n"
 "  --set-counters PKTS BYTES	set the counter during insert/append\n"
 "[!] --version	-V		print package version.\n");
@@ -462,6 +468,8 @@ print_firewall(const struct ip6t_entry *fw,
 {
 	struct xtables_target *target, *tg;
 	const struct xt_entry_target *t;
+	uint8_t flags;
+	char buf[BUFSIZ];
 
 	if (!ip6tc_is_chain(targname, handle))
 		target = xtables_find_target(targname, XTF_TRY_LOAD);
@@ -470,6 +478,7 @@ print_firewall(const struct ip6t_entry *fw,
 		         XTF_LOAD_MUST_SUCCEED);
 
 	t = ip6t_get_target((struct ip6t_entry *)fw);
+	flags = fw->ipv6.flags;
 
 	if (format & FMT_LINENUMBERS)
 		printf(FMT("%-4u ", "%u "), num);
@@ -494,9 +503,23 @@ print_firewall(const struct ip6t_entry *fw,
 	if (format & FMT_OPTIONS) {
 		if (format & FMT_NOTABLE)
 			fputs("opt ", stdout);
-		fputc(' ', stdout); /* Invert flag of FRAG */
-		fputc(' ', stdout); /* -f */
-		fputc(' ', stdout);
+		buf[0] = buf[1] = ' ';
+		buf[2] = '-';
+		buf[3] = ' ';
+		buf[4] = '\0';
+#if 0
+		/* not definied in ipv6 */
+		if (flags & IPT_F_FRAG) {
+			if (fw->ipv6.invflags & IPT_INV_FRAG)
+				buf[0] = '!';
+			buf[1] = 'f';
+		}
+#endif
+		if (flags & IP6T_F_NF_ACCEPT)
+			buf[2] = 'a';
+		else if (flags & IP6T_F_NF_DROP)
+			buf[2] = 'd';
+		fputs(buf, stdout);
 	}
 
 	print_ifaces(fw->ipv6.iniface, fw->ipv6.outiface,
@@ -508,7 +531,7 @@ print_firewall(const struct ip6t_entry *fw,
 		fputs("  ", stdout);
 
 #ifdef IP6T_F_GOTO
-	if(fw->ipv6.flags & IP6T_F_GOTO)
+	if(flags & IP6T_F_GOTO)
 		printf("[goto] ");
 #endif
 
@@ -959,7 +982,7 @@ void print_rule6(const struct ip6t_entry *e,
 		       struct xtc_handle *h, const char *chain, int counters)
 {
 	const struct xt_entry_target *t;
-	const char *target_name;
+	const char *target_name, *action;
 
 	/* print counters for iptables-save */
 	if (counters > 0)
@@ -995,6 +1018,16 @@ void print_rule6(const struct ip6t_entry *e,
 		printf("%s -? %d",
 		       e->ipv6.invflags & IP6T_INV_TOS ? " !" : "",
 		       e->ipv6.tos);
+
+	if (e->ipv6.flags & IP6T_F_NF_ACCEPT)
+		action = "accept";
+	else if (e->ipv6.flags & IP6T_F_NF_DROP)
+		action = "drop";
+	else
+		action = NULL;
+
+	if (action)
+		printf(" -a %s", action);
 
 	/* Print matchinfo part */
 	if (e->target_offset) {
@@ -1183,7 +1216,7 @@ int do_command6(int argc, char *argv[], char **table,
 
 	opts = xt_params->orig_opts;
 	while ((cs.c = getopt_long(argc, argv,
-	   "-:A:C:D:R:I:L::S::M:F::Z::N:X::E:P:Vh::o:p:s:d:j:i:bvw::W::nt:m:xc:g:46",
+	   "-:A:C:D:R:I:L::S::M:F::Z::N:X::E:P:Vh::o:p:s:d:j:i:bvw::W::nt:m:xc:g:46a:",
 					   opts, NULL)) != -1) {
 		switch (cs.c) {
 			/*
@@ -1401,6 +1434,20 @@ int do_command6(int argc, char *argv[], char **table,
 			xtables_parse_interface(optarg,
 					cs.fw6.ipv6.outiface,
 					cs.fw6.ipv6.outiface_mask);
+			break;
+
+		case 'a':
+			set_option(&cs.options, OPT_ACTION, &cs.fw6.ipv6.invflags,
+				   cs.invert);
+
+			if (!strcasecmp(optarg, "accept"))
+				cs.fw6.ipv6.flags |= IP6T_F_NF_ACCEPT;
+			else if (!strcasecmp(optarg, "drop"))
+				cs.fw6.ipv6.flags |= IP6T_F_NF_DROP;
+			else
+				xtables_error(PARAMETER_PROBLEM,
+					"Unknown --action \"%s\" argument\n",
+					optarg);
 			break;
 
 		case 'v':
@@ -1637,16 +1684,14 @@ int do_command6(int argc, char *argv[], char **table,
 				"Warning: using chain %s, not extension\n",
 				cs.jumpto);
 
-			if (cs.target->t)
-				free(cs.target->t);
-
+			free(cs.target->t);
 			cs.target = NULL;
 		}
 
 		/* If they didn't specify a target, or it's a chain
 		   name, use standard. */
 		if (!cs.target
-		    && (strlen(cs.jumpto) == 0
+		    && (*cs.jumpto == '\0'
 			|| ip6tc_is_chain(cs.jumpto, *handle))) {
 			size_t size;
 
@@ -1659,6 +1704,14 @@ int do_command6(int argc, char *argv[], char **table,
 			cs.target->t->u.target_size = size;
 			strcpy(cs.target->t->u.user.name, cs.jumpto);
 			xs_init_target(cs.target);
+		}
+
+		if (!cs.target || !strcmp(cs.target->name, "standard")) {
+			/* -a not valid without extension target */
+			if (cs.options & OPT_ACTION)
+				xtables_error(PARAMETER_PROBLEM,
+					   "Can't specify --action for "
+					   "non-extension targets");
 		}
 
 		if (!cs.target) {
