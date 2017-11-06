@@ -37,7 +37,7 @@
 #include <xtables.h>
 #include <libiptc/xtcshared.h>
 
-#include <linux/list.h>
+#include <xtables-list.h>
 
 //#define IPTC_DEBUG2 1
 

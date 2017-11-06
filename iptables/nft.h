@@ -3,7 +3,7 @@
 
 #include "xshared.h"
 #include "nft-shared.h"
-#include <linux/list.h>
+#include <xtables-list.h>
 
 enum nft_table_type {
 	NFT_TABLE_FILTER	= 0,

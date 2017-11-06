@@ -1,7 +1,7 @@
 # -*- Makefile -*-
 
 include_HEADERS =
-nobase_include_HEADERS = xtables.h xtables-version.h
+nobase_include_HEADERS = xtables.h xtables-version.h xtables-hash.h xtables-list.h
 
 if ENABLE_LIBIPQ
 include_HEADERS += libipq/libipq.h

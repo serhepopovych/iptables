@@ -17,8 +17,6 @@
 #include <net/if.h>
 
 #include <linux/types.h>
-#include <linux/hash.h>
-#include <linux/list.h>
 #include <linux/netfilter.h>
 #include <linux/netfilter/x_tables.h>
 
@@ -36,6 +34,8 @@
 #endif
 
 #include <xtables-version.h>
+#include <xtables-hash.h>
+#include <xtables-list.h>
 
 struct in_addr;
 
