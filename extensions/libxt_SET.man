@@ -7,7 +7,7 @@ add the address(es)/port(s) of the packet to the set
 \fB\-\-del\-set\fP \fIsetname\fP \fIflag\fP[\fB,\fP\fIflag\fP...]
 delete the address(es)/port(s) of the packet from the set
 .TP
-\fB\-\-map\-set\fP \fIsetname\fP \fIflag\fP[\fB,\fP\fIflag\fP...] 
+\fB\-\-map\-set\fP \fIsetname\fP \fIflag\fP[\fB,\fP\fIflag\fP...]
 [\-\-map\-mark] [\-\-map\-prio] [\-\-map\-queue]
 map packet properties (firewall mark, tc priority, hardware queue)
 .IP
@@ -35,8 +35,6 @@ map traffic control priority to packet by lookup of value in the set
 map hardware NIC queue to packet by lookup of value in the set
 .IP
 The
-\fB\-\-map\-set\fP
-option can be used from the mangle table only. The
 \fB\-\-map\-prio\fP
 and
 \fB\-\-map\-queue\fP
