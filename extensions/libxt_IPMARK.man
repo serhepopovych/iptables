@@ -3,23 +3,41 @@ Allows you to mark a received packet basing on its IP address. This
 can replace many mangle/mark entries with only one, if you use
 firewall based classifier.
 .TP
-\fB\-\-addr\fP {\fBsrc\fP|\fBdst\fP}
-Select source or destination IP address as a basis for the mark.
+\fB\-\-src\-addr\fP
+Select source IP address as a basis for the mark.
 .TP
-\fB\-\-and\-mask\fP \fImask\fP
-Perform bitwise AND on the IP address and this bitmask.
-.TP
-\fB\-\-or\-mask\fP \fImask\fP
-Perform bitwise OR on the IP address and this bitmask.
+\fB\-\-dst\-addr\fP
+Select destination IP address as a basis for the mark.
 .TP
 \fB\-\-shift\fP \fIvalue\fP
 Shift addresses to the right by the given number of bits before taking it
-as a mark. (This is done before ANDing or ORing it.) This option is needed
+as a mark. This is done before any other transformations. Option is needed
 to select part of an IPv6 address, because marks are only 32 bits in size.
+.TP
+\fB\-\-set\-xmark\fP \fIvalue\fP[\fB/\fP\fImask\fP]
+Zeroes out the bits given by \fImask\fP and XORs \fIvalue\fP into the basis
+mark. If \fImask\fP is omitted, 0xFFFFFFFF is assumed.
+.TP
+\fB\-\-set\-mark\fP \fIvalue\fP[\fB/\fP\fImask\fP]
+Zeroes out the bits given by \fImask\fP and ORs \fIvalue\fP into the basis
+mark. If \fImask\fP is omitted, 0xFFFFFFFF is assumed.
+.PP
+The following mnemonics are available:
+.TP
+\fB\-\-and\-mark\fP \fIbits\fP
+Binary AND the basis mark with \fIbits\fP. (Mnemonic for \fB\-\-set\-xmark
+0/\fP\fIinvbits\fP, where \fIinvbits\fP is the binary negation of \fIbits\fP.)
+.TP
+\fB\-\-or\-mark\fP \fIbits\fP
+Binary OR the basis mark with \fIbits\fP. (Mnemonic for \fB\-\-set\-xmark\fP
+\fIbits\fP\fB/\fP\fIbits\fP.)
+.TP
+\fB\-\-xor\-mark\fP \fIbits\fP
+Binary XOR the basis mark with \fIbits\fP. (Mnemonic for \fB\-\-set\-xmark\fP
+\fIbits\fP\fB/0\fP.)
 .PP
 The order of IP address bytes is reversed to meet "human order of bytes":
-192.168.0.1 is 0xc0a80001. At first the "AND" operation is performed, then
-"OR".
+192.168.0.1 is 0xc0a80001.
 .PP
 Examples:
 .PP
@@ -41,15 +59,15 @@ iptables \-t mangle \-A POSTROUTING \-o eth3 \-d 192.168.5.3 \-j MARK
 .PP
 Using IPMARK target we can replace all the mangle/mark rules with only one:
 .IP
-iptables \-t mangle \-A POSTROUTING \-o eth3 \-j IPMARK \-\-addr dst
-\-\-and\-mask 0xffff \-\-or\-mask 0x10000
+iptables \-t mangle \-A POSTROUTING \-o eth3 \-j IPMARK \-\-dst\-addr
+\-\-set\-xmark 0x00010000/0xffff0000
 .PP
 On the routers with hundreds of users there should be significant load
 decrease (e.g. twice).
 .PP
-(IPv6 example) If the source address is of the form
+IPv6 example. If the source address is of the form
 2001:db8:45:1d:20d:93ff:fe9b:e443 and the resulting mark should be 0x93ff,
-then a right-shift of 16 is needed first:
+then a right-shift of 32 is needed first:
 .IP
-\-t mangle \-A PREROUTING \-s 2001:db8::/32 \-j IPMARK \-\-addr src \-\-shift
-16 \-\-and\-mask 0xFFFF
+ip6tables \-t mangle \-A PREROUTING \-s 2001:db8::/32 \-j IPMARK \-\-src\-addr
+\-\-shift 32 \-\-and\-mark 0xffff
