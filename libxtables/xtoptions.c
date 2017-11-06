@@ -1246,10 +1246,6 @@ int xtables_lmap_load(const char *file, struct xtables_lmap_table *tbl)
 		id = strtoul(cur, &nxt, base);
 		if (nxt == cur || errno != 0)
 			continue;
-
-		/* same boundaries as in iproute2 */
-		if (id < 0 || id > 255)
-			continue;
 		cur = nxt;
 
 		if (!isspace(*cur))
