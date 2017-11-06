@@ -345,6 +345,12 @@ precedes the "\-f" flag, the rule will only match head fragments, or
 unfragmented packets. This option is IPv4 specific, it is not available
 in ip6tables.
 .TP
+\fB\-a\fP, \fB\-\-action\fP \fI<accept|drop>\fP
+If target specified with \fB\-j\fP or \fB\-\-jump\fP is an extension and
+does not explicitly decide fate of the packet, making it to continue on
+next rule, specifying this option tells that packet either should be
+\fIaccept\fP'ed or \fIdrop\fP'ped after being processed by the target.
+.TP
 \fB\-c\fP, \fB\-\-set\-counters\fP \fIpackets bytes\fP
 This enables the administrator to initialize the packet and byte
 counters of a rule (during \fBINSERT\fP, \fBAPPEND\fP, \fBREPLACE\fP

@@ -88,7 +88,10 @@ struct ip6t_ip6 {
 					   protocols */
 #define IP6T_F_TOS		0x02	/* Match the TOS. */
 #define IP6T_F_GOTO		0x04	/* Set if jump is a goto */
-#define IP6T_F_MASK		0x07	/* All possible flag bits mask. */
+#define IP6T_F_NF_ACCEPT	0x08	/* Accept if target has no verdict */
+#define IP6T_F_NF_DROP		0x10	/* Drop if target has no verdict */
+#define IP6T_F_NF_MASK		0x18	/* Rule verdict mask */
+#define IP6T_F_MASK		0x1f	/* All possible flag bits mask. */
 
 /* Values for "inv" field in struct ip6t_ip6. */
 #define IP6T_INV_VIA_IN		0x01	/* Invert the sense of IN IFACE. */
