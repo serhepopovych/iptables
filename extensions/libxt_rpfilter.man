@@ -21,19 +21,43 @@ assigned to the local machine.
 \fB\-\-invert\fP
 This will invert the sense of the match.  Instead of matching packets that passed the
 reverse path filter test, match those that have failed it.
+.TP
+[\fB!\fP] \fB\-\-prefixlen\fP \fIlength\fP
+Suppress lookup result if prefix length of matched route shorter than or equal to
+specified. This could be used to suppress routes through default route by specifying
+length equal to zero.
+.TP
+[\fB!\fP] \fB\-\-devgroup\fP {\fIname\fP|\fIvalue\fP[\fB/\fP\fImask\fP]}
+Match only if lookup result outgoing interface belongs to specified device group.
+Group may be specified using symbolic name defined in \fIgroup\fP file from iproute2
+package configuration directory or as \fIvalue\fP[\fB/\fP\fImask\fP].
 .PP
 Example to log and drop packets failing the reverse path filter test:
+.IP
+iptables \-t raw -N RPFILTER
+.br
+iptables -t raw -A RPFILTER -m rpfilter -j RETURN
+.br
+iptables -t raw -A RPFILTER -m limit --limit 10/minute -j NFLOG --nflog-prefix "rpfilter drop"
+.br
+iptables -t raw -A RPFILTER -j DROP
 
-iptables \-t raw \-N RPFILTER
-
-iptables \-t raw \-A RPFILTER \-m rpfilter \-j RETURN
-
-iptables \-t raw \-A RPFILTER \-m limit \-\-limit 10/minute \-j NFLOG \-\-nflog\-prefix "rpfilter drop"
-
-iptables \-t raw \-A RPFILTER \-j DROP
-
-iptables \-t raw \-A PREROUTING \-j RPFILTER
-
+iptables -t raw -A PREROUTING -j RPFILTER
+.PP
 Example to drop failed packets, without logging:
+.IP
+iptables -t raw -A RPFILTER -m rpfilter --invert -j DROP
+.PP
+Example to drop packets failed reverse path test in loose mode or reachable via default route:
+.IP
+iptables -t raw -A PREROUTING -m rpfilter --invert --loose --prefixlen 0 -j DROP
+.PP
+Example to drop packets failed reverse path test in loose mode or reachable via sink device group:
+.IP
+ip link add dev dummy1 type dummy
+.br
+ip link set up group 1 dev dummy1
 
-iptables \-t raw \-A RPFILTER \-m rpfilter \-\-invert \-j DROP
+ip -4 route add 192.168.0.0/16 dev dummy1
+
+iptables -t raw -A PREROUTING -m rpfilter --invert --loose ! --devgroup 1 -j DROP
