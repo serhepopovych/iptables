@@ -8,69 +8,110 @@
 #include <linux/pkt_sched.h>
 
 enum {
-	O_SET_CLASS = 0,
+	/* common */
+	O_SET_CLASS	= 0,
+
+	F_SET_CLASS	= (1 << O_SET_CLASS),
+
+	F_COMMON	= F_SET_CLASS,
+
+	/* revision 0 */
+	F_REV0		= F_SET_CLASS,
+	F_REV0_ALL	= F_COMMON | F_REV0,
 };
 
-static void
-CLASSIFY_help(void)
-{
-	printf(
-"CLASSIFY target options:\n"
-"--set-class MAJOR:MINOR    Set skb->priority value (always hexadecimal!)\n");
-}
-
-static const struct xt_option_entry CLASSIFY_opts[] = {
-	{.name = "set-class", .id = O_SET_CLASS, .type = XTTYPE_STRING,
-	 .flags = XTOPT_MAND},
+static const struct xt_option_entry classify_opts[] = {
+	[O_SET_CLASS] = {
+		.name	= "set-class",
+		.id	= O_SET_CLASS,
+		.type	= XTTYPE_STRING,
+	},
 	XTOPT_TABLEEND,
 };
 
-static int CLASSIFY_string_to_priority(const char *s, unsigned int *p)
+static int classify_parse_priority(const char *s, unsigned int *p)
 {
-	unsigned int i, j;
+	unsigned int maj, min;
 
-	if (sscanf(s, "%x:%x", &i, &j) != 2)
-		return 1;
-	
-	*p = TC_H_MAKE(i<<16, j);
+	if (sscanf(s, "%x:%x", &maj, &min) != 2 ||
+	    maj > UINT16_MAX ||
+	    min > UINT16_MAX)
+		return -1;
+
+	*p = TC_H_MAKE(maj << 16, min);
 	return 0;
 }
 
-static void CLASSIFY_parse(struct xt_option_call *cb)
+static void classify_print_priority(const char *pfx, unsigned int p)
 {
-	struct xt_classify_target_info *clinfo = cb->data;
+	printf(" %x:%x", TC_H_MAJ(p) >> 16, TC_H_MIN(p));
+}
 
-	xtables_option_parse(cb);
-	if (CLASSIFY_string_to_priority(cb->arg, &clinfo->priority))
-		xtables_error(PARAMETER_PROBLEM,
-			   "Bad class value \"%s\"", cb->arg);
+static void CLASSIFY_help(void)
+{
+	printf(
+"CLASSIFY target options:\n"
+"  --set-class MAJOR:MINOR    Set skb->priority value\n"
+	);
 }
 
 static void
-CLASSIFY_print_class(unsigned int priority, int numeric)
+CLASSIFY_show(const char *pfx, const struct xt_entry_target *target)
 {
-	printf(" %x:%x", TC_H_MAJ(priority)>>16, TC_H_MIN(priority));
+	const struct xt_classify_target_info *info = (const void *) target->data;
+
+	if (!pfx)
+		pfx = "";
+
+	classify_print_priority(pfx, info->priority);
 }
 
 static void
-CLASSIFY_print(const void *ip,
-      const struct xt_entry_target *target,
-      int numeric)
+CLASSIFY_print(const void *ip, const struct xt_entry_target *target,
+	       int numeric)
 {
-	const struct xt_classify_target_info *clinfo =
-		(const struct xt_classify_target_info *)target->data;
-	printf(" CLASSIFY set");
-	CLASSIFY_print_class(clinfo->priority, numeric);
+	printf(" CLASSIFY");
+	CLASSIFY_show("", target);
 }
 
 static void
 CLASSIFY_save(const void *ip, const struct xt_entry_target *target)
 {
-	const struct xt_classify_target_info *clinfo =
-		(const struct xt_classify_target_info *)target->data;
+	CLASSIFY_show("--", target);
+}
 
-	printf(" --set-class %.4x:%.4x",
-	       TC_H_MAJ(clinfo->priority)>>16, TC_H_MIN(clinfo->priority));
+static void CLASSIFY_parse(struct xt_option_call *cb)
+{
+	struct xt_classify_target_info *info = cb->data;
+	const unsigned int revision = (*cb->target)->u.user.revision;
+	unsigned int id;
+
+	xtables_option_parse(cb);
+	id = cb->entry->id;
+
+	switch (id) {
+	case O_SET_CLASS:
+		/* MAJ:MIN */
+		if (!classify_parse_priority(cb->arg, &info->priority))
+			break;
+
+		xtables_error(PARAMETER_PROBLEM,
+			     "Bad class value \"%s\"", cb->arg);
+	default:
+		xtables_error(PARAMETER_PROBLEM,
+			      "libxt_CLASSIFY.%u does not support --%s",
+			      revision,
+			      classify_opts[id].name);
+	}
+}
+
+static void CLASSIFY_check(struct xt_fcheck_call *cb)
+{
+	if (cb->xflags == 0) {
+		xtables_error(PARAMETER_PROBLEM,
+			      "CLASSIFY target: Parameter --set-class"
+			      "is required");
+	}
 }
 
 static void
@@ -116,33 +157,19 @@ static int CLASSIFY_xlate(struct xt_xlate *xl,
 	return 1;
 }
 
-static struct xtables_target classify_tg_reg[] = {
-	{
-		.family		= NFPROTO_UNSPEC,
-		.name		= "CLASSIFY",
-		.version	= XTABLES_VERSION,
-		.size		= XT_ALIGN(sizeof(struct xt_classify_target_info)),
-		.userspacesize	= XT_ALIGN(sizeof(struct xt_classify_target_info)),
-		.help		= CLASSIFY_help,
-		.print		= CLASSIFY_print,
-		.save		= CLASSIFY_save,
-		.x6_parse	= CLASSIFY_parse,
-		.x6_options	= CLASSIFY_opts,
-		.xlate          = CLASSIFY_xlate,
-	},
-	{
-		.family		= NFPROTO_ARP,
-		.name		= "CLASSIFY",
-		.version	= XTABLES_VERSION,
-		.size		= XT_ALIGN(sizeof(struct xt_classify_target_info)),
-		.userspacesize	= XT_ALIGN(sizeof(struct xt_classify_target_info)),
-		.help		= CLASSIFY_help,
-		.print		= CLASSIFY_arp_print,
-		.save		= CLASSIFY_arp_save,
-		.x6_parse	= CLASSIFY_parse,
-		.x6_options	= CLASSIFY_opts,
-		.xlate          = CLASSIFY_xlate,
-	}
+static struct xtables_target classify_target = {
+	.family		= NFPROTO_UNSPEC,
+	.name		= "CLASSIFY",
+	.version	= XTABLES_VERSION,
+	.size		= XT_ALIGN(sizeof(struct xt_classify_target_info)),
+	.userspacesize	= XT_ALIGN(sizeof(struct xt_classify_target_info)),
+	.help		= CLASSIFY_help,
+	.print		= CLASSIFY_print,
+	.save		= CLASSIFY_save,
+	.xlate		= CLASSIFY_xlate,
+	.x6_parse	= CLASSIFY_parse,
+	.x6_fcheck	= CLASSIFY_check,
+	.x6_options	= CLASSIFY_opts,
 };
 
 void _init(void)
