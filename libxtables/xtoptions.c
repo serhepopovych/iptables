@@ -1108,10 +1108,6 @@ struct xtables_lmap *xtables_lmap_init(const char *file)
 		id = strtoul(cur, &nxt, strncmp(cur, "0x", 2) == 0 ? 16 : 10);
 		if (nxt == cur || errno != 0)
 			continue;
-
-		/* same boundaries as in iproute2 */
-		if (id < 0 || id > 255)
-			continue;
 		cur = nxt;
 
 		if (!isspace(*cur))
