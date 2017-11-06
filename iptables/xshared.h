@@ -124,7 +124,8 @@ extern int command_default(struct iptables_command_state *,
 	struct xtables_globals *);
 extern struct xtables_match *load_proto(struct iptables_command_state *);
 extern int subcmd_main(int, char **, const struct subcommand *);
-extern void xs_init_target(struct xtables_target *);
+extern void __xs_init_target(struct xtables_target *);
+extern void xs_init_target(struct xtables_target *, const char *, bool);
 extern void xs_init_match(struct xtables_match *);
 
 /**

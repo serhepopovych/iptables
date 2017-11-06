@@ -145,16 +145,8 @@ int command_default(struct iptables_command_state *cs,
 	/* Try loading protocol */
 	m = load_proto(cs);
 	if (m != NULL) {
-		size_t size;
-
 		cs->proto_used = 1;
 
-		size = XT_ALIGN(sizeof(struct xt_entry_match)) + m->size;
-
-		m->m = xtables_calloc(1, size);
-		m->m->u.match_size = size;
-		strcpy(m->m->u.user.name, m->name);
-		m->m->u.user.revision = m->revision;
 		xs_init_match(m);
 
 		if (m->x6_options != NULL)
@@ -217,7 +209,7 @@ int subcmd_main(int argc, char **argv, const struct subcommand *cb)
 	exit(EXIT_FAILURE);
 }
 
-void xs_init_target(struct xtables_target *target)
+void __xs_init_target(struct xtables_target *target)
 {
 	if (target->udata_size != 0) {
 		free(target->udata);
@@ -229,8 +221,51 @@ void xs_init_target(struct xtables_target *target)
 		target->init(target->t);
 }
 
+void xs_init_target(struct xtables_target *target, const char *name,
+		    bool is_chain)
+{
+	size_t size = XT_ALIGN(sizeof(struct xt_entry_target)) + target->size;
+
+	target->t = xtables_calloc(1, size);
+	target->t->u.target_size = size;
+	if (target->real_name) {
+		/* Alias support for userspace side */
+		if (!(target->ext_flags & XTABLES_EXT_ALIAS))
+			fprintf(stderr, "Notice: the %s target is converted "
+				"into %s target in rule listing and saving.\n",
+				name, target->real_name);
+		name = target->real_name;
+	}
+	snprintf(target->t->u.user.name, sizeof(target->t->u.user.name),
+		 "%s", name);
+
+	if (!is_chain)
+		target->t->u.user.revision = target->revision;
+
+	__xs_init_target(target);
+}
+
 void xs_init_match(struct xtables_match *match)
 {
+	size_t size = XT_ALIGN(sizeof(struct xt_entry_match)) + match->size;
+	const char *name;
+
+	match->m = xtables_calloc(1, size);
+	match->m->u.match_size = size;
+	if (match->real_name == NULL) {
+		name = match->name;
+	} else {
+		/* Alias support for userspace side */
+		if (!(match->ext_flags & XTABLES_EXT_ALIAS))
+			fprintf(stderr, "Notice: the %s match is converted "
+				"into %s match in rule listing and saving.\n",
+				match->name, match->real_name);
+		name = match->real_name;
+	}
+	snprintf(match->m->u.user.name, sizeof(match->m->u.user.name),
+		 "%s", name);
+	match->m->u.user.revision = match->revision;
+
 	if (match->udata_size != 0) {
 		/*
 		 * As soon as a subsequent instance of the same match
@@ -675,22 +710,7 @@ void command_jump(struct iptables_command_state *cs, const char *jumpto)
 	if (cs->target == NULL)
 		return;
 
-	size = XT_ALIGN(sizeof(struct xt_entry_target)) + cs->target->size;
-
-	cs->target->t = xtables_calloc(1, size);
-	cs->target->t->u.target_size = size;
-	if (cs->target->real_name == NULL) {
-		strcpy(cs->target->t->u.user.name, cs->jumpto);
-	} else {
-		/* Alias support for userspace side */
-		strcpy(cs->target->t->u.user.name, cs->target->real_name);
-		if (!(cs->target->ext_flags & XTABLES_EXT_ALIAS))
-			fprintf(stderr, "Notice: The %s target is converted into %s target "
-				"in rule listing and saving.\n",
-				cs->jumpto, cs->target->real_name);
-	}
-	cs->target->t->u.user.revision = cs->target->revision;
-	xs_init_target(cs->target);
+	xs_init_target(cs->target, cs->jumpto, false);
 
 	if (cs->target->x6_options != NULL)
 		opts = xtables_options_xfrm(xt_params->orig_opts, opts,

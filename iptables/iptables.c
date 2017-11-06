@@ -1217,6 +1217,7 @@ int do_command4(int argc, char *argv[], char **table,
 	struct xtables_rule_match *matchp;
 	struct xtables_target *t;
 	unsigned long long cnt;
+	bool is_chain;
 
 	/* re-set optind to 0 in case do_command4 gets called
 	 * a second time */
@@ -1675,7 +1676,9 @@ int do_command4(int argc, char *argv[], char **table,
 					   chain);
 		}
 
-		if (cs.target && iptc_is_chain(cs.jumpto, *handle)) {
+		is_chain = iptc_is_chain(cs.jumpto, *handle);
+
+		if (is_chain && cs.target) {
 			fprintf(stderr,
 				"Warning: using chain %s, not extension\n",
 				cs.jumpto);
@@ -1688,22 +1691,10 @@ int do_command4(int argc, char *argv[], char **table,
 
 		/* If they didn't specify a target, or it's a chain
 		   name, use standard. */
-		if (!cs.target
-		    && (strlen(cs.jumpto) == 0
-			|| iptc_is_chain(cs.jumpto, *handle))) {
-			size_t size;
-
+		if (!cs.target && (is_chain || *cs.jumpto == '\0')) {
 			cs.target = xtables_find_target(XT_STANDARD_TARGET,
-					 XTF_LOAD_MUST_SUCCEED);
-
-			size = sizeof(struct xt_entry_target)
-				+ cs.target->size;
-			cs.target->t = xtables_calloc(1, size);
-			cs.target->t->u.target_size = size;
-			strcpy(cs.target->t->u.user.name, cs.jumpto);
-			if (!iptc_is_chain(cs.jumpto, *handle))
-				cs.target->t->u.user.revision = cs.target->revision;
-			xs_init_target(cs.target);
+							XTF_LOAD_MUST_SUCCEED);
+			xs_init_target(cs.target, cs.jumpto, is_chain);
 		}
 
 		if (!cs.target) {

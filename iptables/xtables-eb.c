@@ -555,16 +555,7 @@ static void __ebt_load_watcher(const char *name, const char *typename)
 		return;
 	}
 
-	size = XT_ALIGN(sizeof(struct xt_entry_target)) + watcher->size;
-
-	watcher->t = xtables_calloc(1, size);
-	watcher->t->u.target_size = size;
-	snprintf(watcher->t->u.user.name,
-		sizeof(watcher->t->u.user.name), "%s", name);
-	watcher->t->u.user.name[sizeof(watcher->t->u.user.name)-1] = '\0';
-	watcher->t->u.user.revision = watcher->revision;
-
-	xs_init_target(watcher);
+	xs_init_target(watcher, name, false);
 
 	opts = merge_options(opts, watcher->extra_opts,
 			     &watcher->option_offset);
@@ -657,7 +648,7 @@ void ebt_add_watcher(struct xtables_target *watcher,
 	memcpy(clone->t, watcher->t, watcher->t->u.target_size);
 
 	memset(watcher->t->data, 0, watcher->size);
-	xs_init_target(watcher);
+	__xs_init_target(watcher);
 	watcher->tflags = 0;
 
 
