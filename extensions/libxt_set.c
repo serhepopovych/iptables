@@ -508,149 +508,47 @@ set_parse_v4(int c, char **argv, int invert, unsigned int *flags,
 {
 	struct xt_set_info_match_v4 *info =
 		(struct xt_set_info_match_v4 *) (*match)->data;
+	struct xt_set_info_match_v3 info3;
 
-	switch (c) {
-	case 'a':
-		if (invert)
-			info->flags |= IPSET_FLAG_SKIP_SUBCOUNTER_UPDATE;
-		break;
-	case '0':
-		if (info->bytes.op != IPSET_COUNTER_NONE)
-			xtables_error(PARAMETER_PROBLEM,
-				      "only one of the --bytes-[eq|lt|gt]"
-				      " is allowed\n");
-		if (invert)
-			xtables_error(PARAMETER_PROBLEM,
-				      "--bytes-gt option cannot be inverted\n");
-		info->bytes.op = IPSET_COUNTER_GT;
-		info->bytes.value = parse_counter(optarg);
-		break;
-	case '9':
-		if (info->bytes.op != IPSET_COUNTER_NONE)
-			xtables_error(PARAMETER_PROBLEM,
-				      "only one of the --bytes-[eq|lt|gt]"
-				      " is allowed\n");
-		if (invert)
-			xtables_error(PARAMETER_PROBLEM,
-				      "--bytes-lt option cannot be inverted\n");
-		info->bytes.op = IPSET_COUNTER_LT;
-		info->bytes.value = parse_counter(optarg);
-		break;
-	case '8':
-		if (info->bytes.op != IPSET_COUNTER_NONE)
-			xtables_error(PARAMETER_PROBLEM,
-				      "only one of the --bytes-[eq|lt|gt]"
-				      " is allowed\n");
-		info->bytes.op = invert ? IPSET_COUNTER_NE : IPSET_COUNTER_EQ;
-		info->bytes.value = parse_counter(optarg);
-		break;
-	case '7':
-		if (info->packets.op != IPSET_COUNTER_NONE)
-			xtables_error(PARAMETER_PROBLEM,
-				      "only one of the --packets-[eq|lt|gt]"
-				      " is allowed\n");
-		if (invert)
-			xtables_error(PARAMETER_PROBLEM,
-				      "--packets-gt option cannot be inverted\n");
-		info->packets.op = IPSET_COUNTER_GT;
-		info->packets.value = parse_counter(optarg);
-		break;
-	case '6':
-		if (info->packets.op != IPSET_COUNTER_NONE)
-			xtables_error(PARAMETER_PROBLEM,
-				      "only one of the --packets-[eq|lt|gt]"
-				      " is allowed\n");
-		if (invert)
-			xtables_error(PARAMETER_PROBLEM,
-				      "--packets-lt option cannot be inverted\n");
-		info->packets.op = IPSET_COUNTER_LT;
-		info->packets.value = parse_counter(optarg);
-		break;
-	case '5':
-		if (info->packets.op != IPSET_COUNTER_NONE)
-			xtables_error(PARAMETER_PROBLEM,
-				      "only one of the --packets-[eq|lt|gt]"
-				      " is allowed\n");
-		info->packets.op = invert ? IPSET_COUNTER_NE : IPSET_COUNTER_EQ;
-		info->packets.value = parse_counter(optarg);
-		break;
-	case '4':
-		if (invert)
-			info->flags |= IPSET_FLAG_SKIP_COUNTER_UPDATE;
-		break;
-	case '3':
-		if (invert)
-			xtables_error(PARAMETER_PROBLEM,
-				      "--return-nomatch flag cannot be inverted\n");
-		info->flags |= IPSET_FLAG_RETURN_NOMATCH;
-		break;
-	case '2':
-		fprintf(stderr,
-			"--set option deprecated, please use --match-set\n");
-		/* fall through */
-	case '1':		/* --match-set <set> <flag>[,<flag> */
-		if (info->match_set.dim)
-			xtables_error(PARAMETER_PROBLEM,
-				      "--match-set can be specified only once");
-		if (invert)
-			info->match_set.flags |= IPSET_INV_MATCH;
+	set_parse_v3(c, argv, invert, flags, entry, match);
 
-		if (!argv[optind]
-		    || argv[optind][0] == '-'
-		    || argv[optind][0] == '!')
-			xtables_error(PARAMETER_PROBLEM,
-				      "--match-set requires two args.");
+	memcpy(&info3, info, sizeof(info3));
+	memset(info, 0, sizeof(*info));
 
-		if (strlen(optarg) > IPSET_MAXNAMELEN - 1)
-			xtables_error(PARAMETER_PROBLEM,
-				      "setname `%s' too long, max %d characters.",
-				      optarg, IPSET_MAXNAMELEN - 1);
+	info->match_set = info3.match_set;
 
-		get_set_byname(optarg, &info->match_set);
-		parse_dirs(argv[optind], &info->match_set);
-		DEBUGP("parse: set index %u\n", info->match_set.index);
-		optind++;
-
-		*flags = 1;
-		break;
+	if (info3.packets.op != IPSET_COUNTER_NONE) {
+		info->packets.value = info3.packets.value;
+		info->packets.op = info3.packets.op;
 	}
+	if (info3.bytes.op != IPSET_COUNTER_NONE) {
+		info->bytes.value = info3.bytes.value;
+		info->bytes.op = info3.bytes.op;
+	}
+
+	info->flags = info3.flags;
 
 	return 1;
-}
-
-static void
-set_printv4_counter(const struct ip_set_counter_match *c, const char *name,
-		    const char *sep)
-{
-	switch (c->op) {
-	case IPSET_COUNTER_EQ:
-		printf(" %s%s-eq %llu", sep, name, c->value);
-		break;
-	case IPSET_COUNTER_NE:
-		printf(" ! %s%s-eq %llu", sep, name, c->value);
-		break;
-	case IPSET_COUNTER_LT:
-		printf(" %s%s-lt %llu", sep, name, c->value);
-		break;
-	case IPSET_COUNTER_GT:
-		printf(" %s%s-gt %llu", sep, name, c->value);
-		break;
-	}
 }
 
 static void
 set_print_v4_matchinfo(const struct xt_set_info_match_v4 *info,
 		       const char *opt, const char *sep)
 {
-	print_match(opt, &info->match_set);
-	if (info->flags & IPSET_FLAG_RETURN_NOMATCH)
-		printf(" %sreturn-nomatch", sep);
-	if ((info->flags & IPSET_FLAG_SKIP_COUNTER_UPDATE))
-		printf(" ! %supdate-counters", sep);
-	if ((info->flags & IPSET_FLAG_SKIP_SUBCOUNTER_UPDATE))
-		printf(" ! %supdate-subcounters", sep);
-	set_printv4_counter(&info->packets, "packets", sep);
-	set_printv4_counter(&info->bytes, "bytes", sep);
+	const struct xt_set_info_match_v3 info3 = {
+		.match_set = info->match_set,
+		.packets = {
+			.op = info->packets.op,
+			.value = info->packets.value,
+		},
+		.bytes = {
+			.op = info->bytes.op,
+			.value = info->bytes.value,
+		},
+		.flags = info->flags,
+	};
+
+	set_print_v3_matchinfo(&info3, opt, sep);
 }
 
 /* Prints out the matchinfo. */
