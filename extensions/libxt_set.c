@@ -235,36 +235,13 @@ set_parse_v2(int c, char **argv, int invert, unsigned int *flags,
 
 	switch (c) {
 	case '3':
+		if (invert)
+			xtables_error(PARAMETER_PROBLEM,
+				      "--return-nomatch flag cannot be inverted\n");
 		info->flags |= IPSET_RETURN_NOMATCH;
 		break;
-	case '2':
-		fprintf(stderr,
-			"--set option deprecated, please use --match-set\n");
-		/* fall through */
-	case '1':		/* --match-set <set> <flag>[,<flag> */
-		if (info->dim)
-			xtables_error(PARAMETER_PROBLEM,
-				      "--match-set can be specified only once");
-		if (invert)
-			info->flags |= IPSET_INV_MATCH;
-
-		if (!argv[optind]
-		    || argv[optind][0] == '-'
-		    || argv[optind][0] == '!')
-			xtables_error(PARAMETER_PROBLEM,
-				      "--match-set requires two args.");
-
-		if (strlen(optarg) > IPSET_MAXNAMELEN - 1)
-			xtables_error(PARAMETER_PROBLEM,
-				      "setname `%s' too long, max %d characters.",
-				      optarg, IPSET_MAXNAMELEN - 1);
-
-		get_set_byname(optarg, info);
-		parse_dirs(argv[optind], info);
-		DEBUGP("parse: set index %u\n", info->index);
-		optind++;
-
-		*flags = 1;
+	default:
+		set_parse_v1(c, argv, invert, flags, entry, match);
 		break;
 	}
 
