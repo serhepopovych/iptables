@@ -139,39 +139,17 @@ get_set_byname(const char *setname, struct xt_set_info *info)
 }
 
 static void
-parse_dirs_v0(const char *opt_arg, struct xt_set_info_v0 *info)
-{
-	char *saved = strdup(opt_arg);
-	char *ptr, *tmp = saved;
-	int i = 0;
-	
-	while (i < (IPSET_DIM_MAX - 1) && tmp != NULL) {
-		ptr = strsep(&tmp, ",");
-		if (strncmp(ptr, "src", 3) == 0)
-			info->u.flags[i++] |= IPSET_SRC;
-		else if (strncmp(ptr, "dst", 3) == 0)
-			info->u.flags[i++] |= IPSET_DST;
-		else
-			xtables_error(PARAMETER_PROBLEM,
-				"You must spefify (the comma separated list of) 'src' or 'dst'.");
-	}
-
-	if (tmp)
-		xtables_error(PARAMETER_PROBLEM,
-			      "Can't be more src/dst options than %i.", 
-			      IPSET_DIM_MAX);
-
-	free(saved);
-}
-
-static void
 parse_dirs(const char *opt_arg, struct xt_set_info *info)
 {
 	char *saved = strdup(opt_arg);
 	char *ptr, *tmp = saved;
-	
-	while (info->dim < IPSET_DIM_MAX && tmp != NULL) {
-		info->dim++;
+	int dim_max = IPSET_DIM_MAX - 1 * (info->index == IPSET_INVALID_ID);
+
+	while (tmp != NULL) {
+		if (++info->dim > dim_max)
+			xtables_error(PARAMETER_PROBLEM,
+				      "Can't be more src/dst options than %d.",
+				      dim_max);
 		ptr = strsep(&tmp, ",");
 		if (strncmp(ptr, "src", 3) == 0)
 			info->flags |= (1 << info->dim);
@@ -180,12 +158,26 @@ parse_dirs(const char *opt_arg, struct xt_set_info *info)
 				"You must spefify (the comma separated list of) 'src' or 'dst'.");
 	}
 
-	if (tmp)
-		xtables_error(PARAMETER_PROBLEM,
-			      "Can't be more src/dst options than %i.", 
-			      IPSET_DIM_MAX);
-
 	free(saved);
+}
+
+static void
+parse_dirs_v0(const char *opt_arg, struct xt_set_info_v0 *info)
+{
+	struct xt_set_info i = {};
+
+	/* Kernel side in xt_set.c does not accept more than
+	 * IPSET_DIM_MAX - 1 dimensions: follow this limit and
+	 * report it correctly in userspace.
+	 */
+	i.index = IPSET_INVALID_ID;
+
+	parse_dirs(opt_arg, &i);
+
+	while (i.dim) {
+		int flags = i.flags & (1 << i.dim) ? IPSET_SRC : IPSET_DST;
+		info->u.flags[--i.dim] = flags;
+	}
 }
 
 #endif /*_LIBXT_SET_H*/
