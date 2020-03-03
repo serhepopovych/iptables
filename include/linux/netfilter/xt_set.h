@@ -90,4 +90,14 @@ struct xt_set_info_target_v3 {
 	__u32 timeout;
 };
 
+/* Revision 5 match */
+
+struct xt_set_info_match_v5 {
+	struct xt_set_info match_set;
+	struct ip_set_counter_match packets;
+	struct ip_set_counter_match bytes;
+	__u32 flags;
+	__u8 physdev;
+};
+
 #endif /*_XT_SET_H*/

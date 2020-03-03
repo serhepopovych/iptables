@@ -438,14 +438,11 @@ set_printv3_counter(const struct ip_set_counter_match0 *c, const char *name,
 
 static void
 set_print_v3_matchinfo(const char *opt, const char *sep,
-		       const struct xt_set_info_match_v3 *info)
+		       const struct xt_set_info_match_v3 *info,
+		       unsigned int physdev)
 {
-	unsigned int physdev;
-
 	if (info->flags & IPSET_FLAG_PHYSDEV)
 		physdev = IPSET_DIM_MASK;
-	else
-		physdev = 0;
 
 	print_match(opt, sep, &info->match_set, physdev);
 	if (info->flags & IPSET_FLAG_RETURN_NOMATCH)
@@ -464,7 +461,7 @@ set_print_v3(const void *ip, const struct xt_entry_match *match, int numeric)
 {
 	const struct xt_set_info_match_v3 *info = (const void *)match->data;
 
-	set_print_v3_matchinfo("match-set", "", info);
+	set_print_v3_matchinfo("match-set", "", info, 0);
 }
 
 static void
@@ -472,7 +469,7 @@ set_save_v3(const void *ip, const struct xt_entry_match *match)
 {
 	const struct xt_set_info_match_v3 *info = (const void *)match->data;
 
-	set_print_v3_matchinfo("match-set", "--", info);
+	set_print_v3_matchinfo("match-set", "--", info, 0);
 }
 
 /* Revision 4 */
@@ -507,7 +504,8 @@ set_parse_v4(int c, char **argv, int invert, unsigned int *flags,
 
 static void
 set_print_v4_matchinfo(const char *opt, const char *sep,
-		       const struct xt_set_info_match_v4 *info)
+		       const struct xt_set_info_match_v4 *info,
+		       unsigned int physdev)
 {
 	const struct xt_set_info_match_v3 info3 = {
 		.match_set = info->match_set,
@@ -522,7 +520,7 @@ set_print_v4_matchinfo(const char *opt, const char *sep,
 		.flags = info->flags,
 	};
 
-	set_print_v3_matchinfo(opt, sep, &info3);
+	set_print_v3_matchinfo(opt, sep, &info3, physdev);
 }
 
 /* Prints out the matchinfo. */
@@ -531,7 +529,7 @@ set_print_v4(const void *ip, const struct xt_entry_match *match, int numeric)
 {
 	const struct xt_set_info_match_v4 *info = (const void *)match->data;
 
-	set_print_v4_matchinfo("match-set", "", info);
+	set_print_v4_matchinfo("match-set", "", info, 0);
 }
 
 static void
@@ -539,8 +537,52 @@ set_save_v4(const void *ip, const struct xt_entry_match *match)
 {
 	const struct xt_set_info_match_v4 *info = (const void *)match->data;
 
-	set_print_v4_matchinfo("match-set", "--", info);
+	set_print_v4_matchinfo("match-set", "--", info, 0);
 }
+
+/* Revision 5 */
+static int
+set_parse_v5(int c, char **argv, int invert, unsigned int *flags,
+	     const void *entry, struct xt_entry_match **match)
+{
+	struct xt_set_info_match_v5 *info =
+		(struct xt_set_info_match_v5 *) (*match)->data;
+
+	set_parse_v4(c, argv, invert, flags, entry, match);
+
+	info->flags &= ~IPSET_FLAG_PHYSDEV;
+	info->physdev = *flags & IPSET_DIM_MASK;
+
+	return 1;
+}
+
+static void
+set_print_v5_matchinfo(const char *opt, const char *sep,
+		       const struct xt_set_info_match_v5 *info)
+{
+	const struct xt_set_info_match_v4 *info4 = (const void *)info;
+
+	set_print_v4_matchinfo(opt, sep, info4, info->physdev);
+}
+
+/* Prints out the matchinfo. */
+static void
+set_print_v5(const void *ip, const struct xt_entry_match *match, int numeric)
+{
+	const struct xt_set_info_match_v5 *info = (const void *)match->data;
+
+	set_print_v5_matchinfo("match-set", "", info);
+}
+
+static void
+set_save_v5(const void *ip, const struct xt_entry_match *match)
+{
+	const struct xt_set_info_match_v5 *info = (const void *)match->data;
+
+	set_print_v5_matchinfo("match-set", "--", info);
+}
+
+/* Prints out the matchinfo. */
 
 static struct xtables_match set_mt_reg[] = {
 	{
@@ -611,6 +653,20 @@ static struct xtables_match set_mt_reg[] = {
 		.final_check	= set_check_v0,
 		.print		= set_print_v4,
 		.save		= set_save_v4,
+		.extra_opts	= set_opts_v3,
+	},
+	{
+		.name		= "set",
+		.revision	= 5,
+		.version	= XTABLES_VERSION,
+		.family		= NFPROTO_UNSPEC,
+		.size		= XT_ALIGN(sizeof(struct xt_set_info_match_v5)),
+		.userspacesize	= XT_ALIGN(sizeof(struct xt_set_info_match_v5)),
+		.help		= set_help_v3,
+		.parse		= set_parse_v5,
+		.final_check	= set_check_v0,
+		.print		= set_print_v5,
+		.save		= set_save_v5,
 		.extra_opts	= set_opts_v3,
 	},
 };
