@@ -181,7 +181,7 @@ parse_target(char **argv, int invert, struct xt_set_info *info,
 			      optarg, IPSET_MAXNAMELEN - 1);
 
 	get_set_byname(optarg, info);
-	parse_dirs(argv[optind], info);
+	parse_dirs(argv[optind], info, NULL);
 	optind++;
 }
 

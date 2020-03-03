@@ -139,18 +139,30 @@ get_set_byname(const char *setname, struct xt_set_info *info)
 }
 
 static void
-parse_dirs(const char *opt_arg, struct xt_set_info *info)
+parse_dirs(const char *opt_arg, struct xt_set_info *info, unsigned int *physdev)
 {
 	char *saved = strdup(opt_arg);
-	char *ptr, *tmp = saved;
+	char *tmp = saved;
 	int dim_max = IPSET_DIM_MAX - 1 * (info->index == IPSET_INVALID_ID);
 
 	while (tmp != NULL) {
+		char *ptr, *str;
+
 		if (++info->dim > dim_max)
 			xtables_error(PARAMETER_PROBLEM,
 				      "Can't be more src/dst options than %d.",
 				      dim_max);
 		ptr = strsep(&tmp, ",");
+
+		if (physdev != NULL && (str = strchr(ptr, ':')) != NULL) {
+			*str++ = '\0';
+			if (strncmp(ptr, "physdev", 7) != 0)
+				xtables_error(PARAMETER_PROBLEM,
+					      "'src' or 'dst' can only be prefixed with 'physdev'.");
+			ptr = str;
+			*physdev |= (1 << info->dim);
+		}
+
 		if (strncmp(ptr, "src", 3) == 0)
 			info->flags |= (1 << info->dim);
 		else if (strncmp(ptr, "dst", 3) != 0)
@@ -172,7 +184,7 @@ parse_dirs_v0(const char *opt_arg, struct xt_set_info_v0 *info)
 	 */
 	i.index = IPSET_INVALID_ID;
 
-	parse_dirs(opt_arg, &i);
+	parse_dirs(opt_arg, &i, NULL);
 
 	while (i.dim) {
 		int flags = i.flags & (1 << i.dim) ? IPSET_SRC : IPSET_DST;

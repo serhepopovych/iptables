@@ -43,7 +43,7 @@ static const struct option set_opts_v0[] = {
 static void
 set_check_v0(unsigned int flags)
 {
-	if (!flags)
+	if (!(flags & 1U))
 		xtables_error(PARAMETER_PROBLEM,
 			"You must specify `--match-set' with proper arguments");
 }
@@ -161,11 +161,11 @@ set_parse_v1(int c, char **argv, int invert, unsigned int *flags,
 				      optarg, IPSET_MAXNAMELEN - 1);
 
 		get_set_byname(optarg, info);
-		parse_dirs(argv[optind], info);
+		parse_dirs(argv[optind], info, *flags ? flags : NULL);
 		DEBUGP("parse: set index %u\n", info->index);
 		optind++;
 
-		*flags = 1;
+		*flags |= 1;
 		break;
 	}
 
@@ -174,7 +174,7 @@ set_parse_v1(int c, char **argv, int invert, unsigned int *flags,
 
 static void
 print_match(const char *opt, const char *sep,
-	    const struct xt_set_info *info)
+	    const struct xt_set_info *info, unsigned int physdev)
 {
 	int i;
 	char setname[IPSET_MAXNAMELEN];
@@ -185,8 +185,9 @@ print_match(const char *opt, const char *sep,
 	       sep, opt,
 	       setname); 
 	for (i = 1; i <= info->dim; i++) {		
-		printf("%s%s",
+		printf("%s%s%s",
 		       i == 1 ? " " : ",",
+		       physdev & (1 << i) ? "physdev:" : "",
 		       info->flags & (1 << i) ? "src" : "dst");
 	}
 }
@@ -197,7 +198,7 @@ set_print_v1(const void *ip, const struct xt_entry_match *match, int numeric)
 {
 	const struct xt_set_info_match_v1 *info = (const void *)match->data;
 
-	print_match("match-set", "", &info->match_set);
+	print_match("match-set", "", &info->match_set, 0);
 }
 
 static void
@@ -205,7 +206,7 @@ set_save_v1(const void *ip, const struct xt_entry_match *match)
 {
 	const struct xt_set_info_match_v1 *info = (const void *)match->data;
 
-	print_match("match-set", "--", &info->match_set);
+	print_match("match-set", "--", &info->match_set, 0);
 }
 
 /* Revision 2 */
@@ -255,7 +256,7 @@ set_print_v2(const void *ip, const struct xt_entry_match *match, int numeric)
 {
 	const struct xt_set_info_match_v1 *info = (const void *)match->data;
 
-	print_match("match-set", "", &info->match_set);
+	print_match("match-set", "", &info->match_set, 0);
 	if (info->match_set.flags & IPSET_RETURN_NOMATCH)
 		printf(" return-nomatch");
 }
@@ -265,7 +266,7 @@ set_save_v2(const void *ip, const struct xt_entry_match *match)
 {
 	const struct xt_set_info_match_v1 *info = (const void *)match->data;
 
-	print_match("match-set", "--", &info->match_set);
+	print_match("match-set", "--", &info->match_set, 0);
 	if (info->match_set.flags & IPSET_RETURN_NOMATCH)
 		printf(" --return-nomatch");
 }
@@ -394,7 +395,21 @@ set_parse_v3(int c, char **argv, int invert, unsigned int *flags,
 		info->flags |= IPSET_FLAG_RETURN_NOMATCH;
 		break;
 	default:
+		/* Signal that "physdev:" is supported for 'src' and 'dst' */
+		*flags = (1U << 16);
+
 		set_parse_v1(c, argv, invert, flags, entry, match);
+
+		if (*flags & IPSET_DIM_MASK) {
+			/* Backward compatibility for hash:net,iface that
+			 * assidentially uses @enum ipset_cadt_flags instead
+			 * of dedicated @enum ipset_cmd_flags flag for this.
+			 *
+			 * Note that cadt IPSET_FLAG_PHYSDEV matches to
+			 * IPSET_FLAG_LIST_SETNAME from command flags set.
+			 */
+			info->flags |= IPSET_FLAG_PHYSDEV;
+		}
 		break;
 	}
 
@@ -425,7 +440,14 @@ static void
 set_print_v3_matchinfo(const char *opt, const char *sep,
 		       const struct xt_set_info_match_v3 *info)
 {
-	print_match(opt, sep, &info->match_set);
+	unsigned int physdev;
+
+	if (info->flags & IPSET_FLAG_PHYSDEV)
+		physdev = IPSET_DIM_MASK;
+	else
+		physdev = 0;
+
+	print_match(opt, sep, &info->match_set, physdev);
 	if (info->flags & IPSET_FLAG_RETURN_NOMATCH)
 		printf(" %sreturn-nomatch", sep);
 	if ((info->flags & IPSET_FLAG_SKIP_COUNTER_UPDATE))
