@@ -299,14 +299,6 @@ set_target_parse_v2(int c, char **argv, int invert, unsigned int *flags,
 	unsigned int timeout;
 
 	switch (c) {
-	case '1':		/* --add-set <set> <flags> */
-		parse_target(argv, invert, &myinfo->add_set, "add-set");
-		*flags |= SET_TARGET_ADD;
-		break;
-	case '2':		/* --del-set <set>[:<flags>] <flags> */
-		parse_target(argv, invert, &myinfo->del_set, "del-set");
-		*flags |= SET_TARGET_DEL;
-		break;
 	case '3':
 		myinfo->flags |= IPSET_FLAG_EXIST;
 		*flags |= SET_TARGET_EXIST;
@@ -318,6 +310,9 @@ set_target_parse_v2(int c, char **argv, int invert, unsigned int *flags,
 				      "or out of range 0-%u", UINT32_MAX - 1);
 		myinfo->timeout = timeout;
 		*flags |= SET_TARGET_TIMEOUT;
+		break;
+	default:
+		set_target_parse_v1(c, argv, invert, flags, entry, target);
 		break;
 	}
 	return 1;
@@ -433,14 +428,6 @@ set_target_parse_v3(int c, char **argv, int invert, unsigned int *flags,
 	unsigned int timeout;
 
 	switch (c) {
-	case '1':		/* --add-set <set> <flags> */
-		parse_target(argv, invert, &myinfo->add_set, "add-set");
-		*flags |= SET_TARGET_ADD;
-		break;
-	case '2':		/* --del-set <set>[:<flags>] <flags> */
-		parse_target(argv, invert, &myinfo->del_set, "del-set");
-		*flags |= SET_TARGET_DEL;
-		break;
 	case '3':
 		myinfo->flags |= IPSET_FLAG_EXIST;
 		*flags |= SET_TARGET_EXIST;
@@ -468,6 +455,9 @@ set_target_parse_v3(int c, char **argv, int invert, unsigned int *flags,
 	case '8':
 		myinfo->flags |= IPSET_FLAG_MAP_SKBQUEUE;
 		*flags |= SET_TARGET_MAP_QUEUE;
+		break;
+	default:
+		set_target_parse_v1(c, argv, invert, flags, entry, target);
 		break;
 	}
 	return 1;
