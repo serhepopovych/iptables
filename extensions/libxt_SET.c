@@ -348,14 +348,10 @@ set_target_parse_v2(int c, char **argv, int invert, unsigned int *flags,
 
 static void
 set_print_v2_targetinfo(const struct xt_set_info_target_v2 *info,
-			const char *sep)
+			const char *sep, unsigned int physdev)
 {
-	unsigned int physdev;
-
 	if (info->flags & IPSET_FLAG_PHYSDEV)
 		physdev = IPSET_DIM_MASK;
-	else
-		physdev = 0;
 
 	print_target("add-set", sep, &info->add_set, physdev);
 	if (info->flags & IPSET_FLAG_EXIST)
@@ -371,7 +367,7 @@ set_target_print_v2(const void *ip, const struct xt_entry_target *target,
 {
 	const struct xt_set_info_target_v2 *info = (const void *)target->data;
 
-	set_print_v2_targetinfo(info, "");
+	set_print_v2_targetinfo(info, "", 0);
 }
 
 static void
@@ -379,7 +375,7 @@ set_target_save_v2(const void *ip, const struct xt_entry_target *target)
 {
 	const struct xt_set_info_target_v2 *info = (const void *)target->data;
 
-	set_print_v2_targetinfo(info, "--");
+	set_print_v2_targetinfo(info, "--", 0);
 }
 
 /* Revision 3 */
@@ -516,14 +512,10 @@ set_target_parse_v3(int c, char **argv, int invert, unsigned int *flags,
 
 static void
 set_print_v3_targetinfo(const struct xt_set_info_target_v3 *info,
-			const char *sep)
+			const char *sep, unsigned int physdev)
 {
-	unsigned int physdev;
-
 	if (info->flags & IPSET_FLAG_PHYSDEV)
 		physdev = IPSET_DIM_MASK;
-	else
-		physdev = 0;
 
 	print_target("add-set", sep, &info->add_set, physdev);
 	if (info->flags & IPSET_FLAG_EXIST)
@@ -546,7 +538,7 @@ set_target_print_v3(const void *ip, const struct xt_entry_target *target,
 {
 	const struct xt_set_info_target_v3 *info = (const void *)target->data;
 
-	set_print_v3_targetinfo(info, "");
+	set_print_v3_targetinfo(info, "", 0);
 }
 
 static void
@@ -554,7 +546,49 @@ set_target_save_v3(const void *ip, const struct xt_entry_target *target)
 {
 	const struct xt_set_info_target_v3 *info = (const void *)target->data;
 
-	set_print_v3_targetinfo(info, "--");
+	set_print_v3_targetinfo(info, "--", 0);
+}
+
+/* Revision 4 */
+static int
+set_target_parse_v4(int c, char **argv, int invert, unsigned int *flags,
+		    const void *entry, struct xt_entry_target **target)
+{
+	struct xt_set_info_target_v4 *myinfo =
+		(struct xt_set_info_target_v4 *) (*target)->data;
+
+	set_target_parse_v3(c, argv, invert, flags, entry, target);
+
+	myinfo->flags &= ~IPSET_FLAG_PHYSDEV;
+	myinfo->physdev = *flags & IPSET_DIM_MASK;
+
+	return 1;
+}
+
+static void
+set_print_v4_targetinfo(const struct xt_set_info_target_v4 *info,
+			const char *sep)
+{
+	const struct xt_set_info_target_v3 *info3 = (const void *)info;
+
+	set_print_v3_targetinfo(info3, sep, info->physdev);
+}
+
+static void
+set_target_print_v4(const void *ip, const struct xt_entry_target *target,
+		    int numeric)
+{
+	const struct xt_set_info_target_v4 *info = (const void *)target->data;
+
+	set_print_v4_targetinfo(info, "");
+}
+
+static void
+set_target_save_v4(const void *ip, const struct xt_entry_target *target)
+{
+	const struct xt_set_info_target_v4 *info = (const void *)target->data;
+
+	set_print_v4_targetinfo(info, "--");
 }
 
 static struct xtables_target set_tg_reg[] = {
@@ -616,6 +650,21 @@ static struct xtables_target set_tg_reg[] = {
 		.final_check	= set_target_check_v3,
 		.print		= set_target_print_v3,
 		.save		= set_target_save_v3,
+		.extra_opts	= set_target_opts_v3,
+	},
+	{
+		.name		= "SET",
+		.revision	= 4,
+		.version	= XTABLES_VERSION,
+		.family		= NFPROTO_UNSPEC,
+		.size		= XT_ALIGN(sizeof(struct xt_set_info_target_v4)),
+		.userspacesize	= XT_ALIGN(sizeof(struct xt_set_info_target_v4)),
+		.help		= set_target_help_v3,
+		.init		= set_target_init_v3,
+		.parse		= set_target_parse_v4,
+		.final_check	= set_target_check_v3,
+		.print		= set_target_print_v4,
+		.save		= set_target_save_v4,
 		.extra_opts	= set_target_opts_v3,
 	},
 };
