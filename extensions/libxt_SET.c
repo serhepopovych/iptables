@@ -154,14 +154,18 @@ set_target_init_v1(struct xt_entry_target *target)
 
 }
 
-#define SET_TARGET_ADD		0x1
-#define SET_TARGET_DEL		0x2
-#define SET_TARGET_EXIST	0x4
-#define SET_TARGET_TIMEOUT	0x8
-#define SET_TARGET_MAP		0x10
-#define SET_TARGET_MAP_MARK	0x20
-#define SET_TARGET_MAP_PRIO	0x40
-#define SET_TARGET_MAP_QUEUE	0x80
+enum {
+	SET_TARGET_SHIFT	= IPSET_DIM_MAX + 2, /* 6 + 2 = 8 */
+
+	SET_TARGET_ADD		= (1 << (0 + SET_TARGET_SHIFT)),
+	SET_TARGET_DEL		= (1 << (1 + SET_TARGET_SHIFT)),
+	SET_TARGET_EXIST	= (1 << (2 + SET_TARGET_SHIFT)),
+	SET_TARGET_TIMEOUT	= (1 << (3 + SET_TARGET_SHIFT)),
+	SET_TARGET_MAP		= (1 << (4 + SET_TARGET_SHIFT)),
+	SET_TARGET_MAP_MARK	= (1 << (5 + SET_TARGET_SHIFT)),
+	SET_TARGET_MAP_PRIO	= (1 << (6 + SET_TARGET_SHIFT)),
+	SET_TARGET_MAP_QUEUE	= (1 << (7 + SET_TARGET_SHIFT)),
+};
 
 static void
 parse_target(const char *what, char **argv, int invert,
@@ -181,7 +185,7 @@ parse_target(const char *what, char **argv, int invert,
 			      optarg, IPSET_MAXNAMELEN - 1);
 
 	get_set_byname(optarg, info);
-	parse_dirs(argv[optind], info, NULL);
+	parse_dirs(argv[optind], info, flags);
 	optind++;
 }
 
@@ -195,12 +199,12 @@ set_target_parse_v1(int c, char **argv, int invert, unsigned int *flags,
 	switch (c) {
 	case '1':		/* --add-set <set> <flags> */
 		parse_target("add-set", argv, invert,
-			     flags, &myinfo->add_set);
+			     *flags & 1 ? flags : NULL, &myinfo->add_set);
 		*flags |= SET_TARGET_ADD;
 		break;
 	case '2':		/* --del-set <set>[:<flags>] <flags> */
 		parse_target("del-set", argv, invert,
-			     flags, &myinfo->del_set);
+			     NULL, &myinfo->del_set);
 		*flags |= SET_TARGET_DEL;
 		break;
 	}
@@ -208,7 +212,8 @@ set_target_parse_v1(int c, char **argv, int invert, unsigned int *flags,
 }
 
 static void
-print_target(const char *opt, const char *sep, const struct xt_set_info *info)
+print_target(const char *opt, const char *sep,
+	     const struct xt_set_info *info, unsigned int physdev)
 {
 	int i;
 	char setname[IPSET_MAXNAMELEN];
@@ -218,8 +223,9 @@ print_target(const char *opt, const char *sep, const struct xt_set_info *info)
 	get_set_byid(setname, info->index);
 	printf(" %s%s %s", sep, opt, setname);
 	for (i = 1; i <= info->dim; i++) {
-		printf("%s%s",
+		printf("%s%s%s",
 		       i == 1 ? " " : ",",
+		       physdev & (1 << i) ? "physdev:" : "",
 		       info->flags & (1 << i) ? "src" : "dst");
 	}
 }
@@ -228,8 +234,8 @@ static void
 set_print_v1_targetinfo(const struct xt_set_info_target_v1 *info,
 			const char *sep)
 {
-	print_target("add-set", sep, &info->add_set);
-	print_target("del-set", sep, &info->del_set);
+	print_target("add-set", sep, &info->add_set, 0);
+	print_target("del-set", sep, &info->del_set, 0);
 }
 
 static void
@@ -320,7 +326,21 @@ set_target_parse_v2(int c, char **argv, int invert, unsigned int *flags,
 		*flags |= SET_TARGET_TIMEOUT;
 		break;
 	default:
+		/* Signal that "physdev:" is supported for 'src' and 'dst' */
+		*flags |= 1U;
+
 		set_target_parse_v1(c, argv, invert, flags, entry, target);
+
+		if (*flags & IPSET_DIM_MASK) {
+			/* Backward compatibility for hash:net,iface that
+			 * assidentially uses @enum ipset_cadt_flags instead
+			 * of dedicated @enum ipset_cmd_flags flag for this.
+			 *
+			 * Note that cadt IPSET_FLAG_PHYSDEV matches to
+			 * IPSET_FLAG_LIST_SETNAME from command flags set.
+			 */
+			myinfo->flags |= IPSET_FLAG_PHYSDEV;
+		}
 		break;
 	}
 	return 1;
@@ -330,12 +350,19 @@ static void
 set_print_v2_targetinfo(const struct xt_set_info_target_v2 *info,
 			const char *sep)
 {
-	print_target("add-set", sep, &info->add_set);
+	unsigned int physdev;
+
+	if (info->flags & IPSET_FLAG_PHYSDEV)
+		physdev = IPSET_DIM_MASK;
+	else
+		physdev = 0;
+
+	print_target("add-set", sep, &info->add_set, physdev);
 	if (info->flags & IPSET_FLAG_EXIST)
 		printf(" %sexist", sep);
 	if (info->timeout != UINT32_MAX)
 		printf(" %stimeout %u", sep, info->timeout);
-	print_target("del-set", sep, &info->del_set);
+	print_target("del-set", sep, &info->del_set, 0);
 }
 
 static void
@@ -451,7 +478,7 @@ set_target_parse_v3(int c, char **argv, int invert, unsigned int *flags,
 		break;
 	case '5':		/* --map-set <set> <flags> */
 		parse_target("map-set", argv, invert,
-			     flags, &myinfo->map_set);
+			     NULL, &myinfo->map_set);
 		*flags |= SET_TARGET_MAP;
 		break;
 	case '6':
@@ -467,7 +494,21 @@ set_target_parse_v3(int c, char **argv, int invert, unsigned int *flags,
 		*flags |= SET_TARGET_MAP_QUEUE;
 		break;
 	default:
+		/* Signal that "physdev:" is supported for 'src' and 'dst' */
+		*flags |= 1U;
+
 		set_target_parse_v1(c, argv, invert, flags, entry, target);
+
+		if (*flags & IPSET_DIM_MASK) {
+			/* Backward compatibility for hash:net,iface that
+			 * assidentially uses @enum ipset_cadt_flags instead
+			 * of dedicated @enum ipset_cmd_flags flag for this.
+			 *
+			 * Note that cadt IPSET_FLAG_PHYSDEV matches to
+			 * IPSET_FLAG_LIST_SETNAME from command flags set.
+			 */
+			myinfo->flags |= IPSET_FLAG_PHYSDEV;
+		}
 		break;
 	}
 	return 1;
@@ -477,13 +518,20 @@ static void
 set_print_v3_targetinfo(const struct xt_set_info_target_v3 *info,
 			const char *sep)
 {
-	print_target("add-set", sep, &info->add_set);
+	unsigned int physdev;
+
+	if (info->flags & IPSET_FLAG_PHYSDEV)
+		physdev = IPSET_DIM_MASK;
+	else
+		physdev = 0;
+
+	print_target("add-set", sep, &info->add_set, physdev);
 	if (info->flags & IPSET_FLAG_EXIST)
 		printf(" %sexist", sep);
 	if (info->timeout != UINT32_MAX)
 		printf(" %stimeout %u", sep, info->timeout);
-	print_target("del-set", sep, &info->del_set);
-	print_target("map-set", sep, &info->map_set);
+	print_target("del-set", sep, &info->del_set, 0);
+	print_target("map-set", sep, &info->map_set, 0);
 	if (info->flags & IPSET_FLAG_MAP_SKBMARK)
 		printf(" %smap-mark", sep);
 	if (info->flags & IPSET_FLAG_MAP_SKBPRIO)

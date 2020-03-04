@@ -12,10 +12,12 @@ delete the address(es)/port(s) of the packet from the set
 map packet properties (firewall mark, tc priority, hardware queue)
 .IP
 where \fIflag\fP(s) are
-.BR "src"
+.BR "[physdev:]src"
 and/or
-.BR "dst"
-specifications and there can be no more than six of them.
+.BR "[physdev:]dst"
+specifications and there can be no more than six of them. If flagged with
+\fBphysdev:\fR then bridge port is used for packets received in bridge.
+This is only supported for \fB\-\-add\-set\fP option.
 .TP
 \fB\-\-timeout\fP \fIvalue\fP
 when adding an entry, the timeout value to use instead of the default
