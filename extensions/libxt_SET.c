@@ -60,8 +60,8 @@ set_target_init_v0(struct xt_entry_target *target)
 }
 
 static void
-parse_target_v0(char **argv, int invert, unsigned int *flags,
-		struct xt_set_info_v0 *info, const char *what)
+parse_target_v0(const char *what, char **argv, int invert,
+		unsigned int *flags, struct xt_set_info_v0 *info)
 {
 	if (info->u.flags[0])
 		xtables_error(PARAMETER_PROBLEM,
@@ -93,12 +93,12 @@ set_target_parse_v0(int c, char **argv, int invert, unsigned int *flags,
 
 	switch (c) {
 	case '1':		/* --add-set <set> <flags> */
-		parse_target_v0(argv, invert, flags,
-				&myinfo->add_set, "add-set");
+		parse_target_v0("add-set", argv, invert,
+				flags, &myinfo->add_set);
 		break;
 	case '2':		/* --del-set <set>[:<flags>] <flags> */
-		parse_target_v0(argv, invert, flags,
-				&myinfo->del_set, "del-set");
+		parse_target_v0("del-set", argv, invert,
+				flags, &myinfo->del_set);
 		break;
 	}
 	return 1;
@@ -164,8 +164,8 @@ set_target_init_v1(struct xt_entry_target *target)
 #define SET_TARGET_MAP_QUEUE	0x80
 
 static void
-parse_target(char **argv, int invert, struct xt_set_info *info,
-	     const char *what)
+parse_target(const char *what, char **argv, int invert,
+	     unsigned int *flags, struct xt_set_info *info)
 {
 	if (info->dim)
 		xtables_error(PARAMETER_PROBLEM,
@@ -194,11 +194,13 @@ set_target_parse_v1(int c, char **argv, int invert, unsigned int *flags,
 
 	switch (c) {
 	case '1':		/* --add-set <set> <flags> */
-		parse_target(argv, invert, &myinfo->add_set, "add-set");
+		parse_target("add-set", argv, invert,
+			     flags, &myinfo->add_set);
 		*flags |= SET_TARGET_ADD;
 		break;
 	case '2':		/* --del-set <set>[:<flags>] <flags> */
-		parse_target(argv, invert, &myinfo->del_set, "del-set");
+		parse_target("del-set", argv, invert,
+			     flags, &myinfo->del_set);
 		*flags |= SET_TARGET_DEL;
 		break;
 	}
@@ -441,7 +443,8 @@ set_target_parse_v3(int c, char **argv, int invert, unsigned int *flags,
 		*flags |= SET_TARGET_TIMEOUT;
 		break;
 	case '5':		/* --map-set <set> <flags> */
-		parse_target(argv, invert, &myinfo->map_set, "map-set");
+		parse_target("map-set", argv, invert,
+			     flags, &myinfo->map_set);
 		*flags |= SET_TARGET_MAP;
 		break;
 	case '6':
