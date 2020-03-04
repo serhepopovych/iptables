@@ -208,7 +208,7 @@ set_target_parse_v1(int c, char **argv, int invert, unsigned int *flags,
 }
 
 static void
-print_target(const char *prefix, const struct xt_set_info *info)
+print_target(const char *opt, const char *sep, const struct xt_set_info *info)
 {
 	int i;
 	char setname[IPSET_MAXNAMELEN];
@@ -216,7 +216,7 @@ print_target(const char *prefix, const struct xt_set_info *info)
 	if (info->index == IPSET_INVALID_ID)
 		return;
 	get_set_byid(setname, info->index);
-	printf(" %s %s", prefix, setname);
+	printf(" %s%s %s", sep, opt, setname);
 	for (i = 1; i <= info->dim; i++) {
 		printf("%s%s",
 		       i == 1 ? " " : ",",
@@ -225,13 +225,20 @@ print_target(const char *prefix, const struct xt_set_info *info)
 }
 
 static void
+set_print_v1_targetinfo(const struct xt_set_info_target_v1 *info,
+			const char *sep)
+{
+	print_target("add-set", sep, &info->add_set);
+	print_target("del-set", sep, &info->del_set);
+}
+
+static void
 set_target_print_v1(const void *ip, const struct xt_entry_target *target,
 		    int numeric)
 {
 	const struct xt_set_info_target_v1 *info = (const void *)target->data;
 
-	print_target("add-set", &info->add_set);
-	print_target("del-set", &info->del_set);
+	set_print_v1_targetinfo(info, "");
 }
 
 static void
@@ -239,8 +246,7 @@ set_target_save_v1(const void *ip, const struct xt_entry_target *target)
 {
 	const struct xt_set_info_target_v1 *info = (const void *)target->data;
 
-	print_target("--add-set", &info->add_set);
-	print_target("--del-set", &info->del_set);
+	set_print_v1_targetinfo(info, "--");
 }
 
 /* Revision 2 */
@@ -321,17 +327,24 @@ set_target_parse_v2(int c, char **argv, int invert, unsigned int *flags,
 }
 
 static void
+set_print_v2_targetinfo(const struct xt_set_info_target_v2 *info,
+			const char *sep)
+{
+	print_target("add-set", sep, &info->add_set);
+	if (info->flags & IPSET_FLAG_EXIST)
+		printf(" %sexist", sep);
+	if (info->timeout != UINT32_MAX)
+		printf(" %stimeout %u", sep, info->timeout);
+	print_target("del-set", sep, &info->del_set);
+}
+
+static void
 set_target_print_v2(const void *ip, const struct xt_entry_target *target,
 		    int numeric)
 {
 	const struct xt_set_info_target_v2 *info = (const void *)target->data;
 
-	print_target("add-set", &info->add_set);
-	if (info->flags & IPSET_FLAG_EXIST)
-		printf(" exist");
-	if (info->timeout != UINT32_MAX)
-		printf(" timeout %u", info->timeout);
-	print_target("del-set", &info->del_set);
+	set_print_v2_targetinfo(info, "");
 }
 
 static void
@@ -339,14 +352,8 @@ set_target_save_v2(const void *ip, const struct xt_entry_target *target)
 {
 	const struct xt_set_info_target_v2 *info = (const void *)target->data;
 
-	print_target("--add-set", &info->add_set);
-	if (info->flags & IPSET_FLAG_EXIST)
-		printf(" --exist");
-	if (info->timeout != UINT32_MAX)
-		printf(" --timeout %u", info->timeout);
-	print_target("--del-set", &info->del_set);
+	set_print_v2_targetinfo(info, "--");
 }
-
 
 /* Revision 3 */
 
@@ -467,24 +474,31 @@ set_target_parse_v3(int c, char **argv, int invert, unsigned int *flags,
 }
 
 static void
+set_print_v3_targetinfo(const struct xt_set_info_target_v3 *info,
+			const char *sep)
+{
+	print_target("add-set", sep, &info->add_set);
+	if (info->flags & IPSET_FLAG_EXIST)
+		printf(" %sexist", sep);
+	if (info->timeout != UINT32_MAX)
+		printf(" %stimeout %u", sep, info->timeout);
+	print_target("del-set", sep, &info->del_set);
+	print_target("map-set", sep, &info->map_set);
+	if (info->flags & IPSET_FLAG_MAP_SKBMARK)
+		printf(" %smap-mark", sep);
+	if (info->flags & IPSET_FLAG_MAP_SKBPRIO)
+		printf(" %smap-prio", sep);
+	if (info->flags & IPSET_FLAG_MAP_SKBQUEUE)
+		printf(" %smap-queue", sep);
+}
+
+static void
 set_target_print_v3(const void *ip, const struct xt_entry_target *target,
 		    int numeric)
 {
 	const struct xt_set_info_target_v3 *info = (const void *)target->data;
 
-	print_target("add-set", &info->add_set);
-	if (info->flags & IPSET_FLAG_EXIST)
-		printf(" exist");
-	if (info->timeout != UINT32_MAX)
-		printf(" timeout %u", info->timeout);
-	print_target("del-set", &info->del_set);
-	print_target("map-set", &info->map_set);
-	if (info->flags & IPSET_FLAG_MAP_SKBMARK)
-		printf(" map-mark");
-	if (info->flags & IPSET_FLAG_MAP_SKBPRIO)
-		printf(" map-prio");
-	if (info->flags & IPSET_FLAG_MAP_SKBQUEUE)
-		printf(" map-queue");
+	set_print_v3_targetinfo(info, "");
 }
 
 static void
@@ -492,19 +506,7 @@ set_target_save_v3(const void *ip, const struct xt_entry_target *target)
 {
 	const struct xt_set_info_target_v3 *info = (const void *)target->data;
 
-	print_target("--add-set", &info->add_set);
-	if (info->flags & IPSET_FLAG_EXIST)
-		printf(" --exist");
-	if (info->timeout != UINT32_MAX)
-		printf(" --timeout %u", info->timeout);
-	print_target("--del-set", &info->del_set);
-	print_target("--map-set", &info->map_set);
-	if (info->flags & IPSET_FLAG_MAP_SKBMARK)
-		printf(" --map-mark");
-	if (info->flags & IPSET_FLAG_MAP_SKBPRIO)
-		printf(" --map-prio");
-	if (info->flags & IPSET_FLAG_MAP_SKBQUEUE)
-		printf(" --map-queue");
+	set_print_v3_targetinfo(info, "--");
 }
 
 static struct xtables_target set_tg_reg[] = {
