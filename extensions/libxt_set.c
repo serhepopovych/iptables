@@ -173,15 +173,16 @@ set_parse_v1(int c, char **argv, int invert, unsigned int *flags,
 }
 
 static void
-print_match(const char *prefix, const struct xt_set_info *info)
+print_match(const char *opt, const char *sep,
+	    const struct xt_set_info *info)
 {
 	int i;
 	char setname[IPSET_MAXNAMELEN];
 
 	get_set_byid(setname, info->index);
-	printf("%s %s %s",
+	printf("%s %s%s %s",
 	       (info->flags & IPSET_INV_MATCH) ? " !" : "",
-	       prefix,
+	       sep, opt,
 	       setname); 
 	for (i = 1; i <= info->dim; i++) {		
 		printf("%s%s",
@@ -196,7 +197,7 @@ set_print_v1(const void *ip, const struct xt_entry_match *match, int numeric)
 {
 	const struct xt_set_info_match_v1 *info = (const void *)match->data;
 
-	print_match("match-set", &info->match_set);
+	print_match("match-set", "", &info->match_set);
 }
 
 static void
@@ -204,7 +205,7 @@ set_save_v1(const void *ip, const struct xt_entry_match *match)
 {
 	const struct xt_set_info_match_v1 *info = (const void *)match->data;
 
-	print_match("--match-set", &info->match_set);
+	print_match("match-set", "--", &info->match_set);
 }
 
 /* Revision 2 */
@@ -254,7 +255,7 @@ set_print_v2(const void *ip, const struct xt_entry_match *match, int numeric)
 {
 	const struct xt_set_info_match_v1 *info = (const void *)match->data;
 
-	print_match("match-set", &info->match_set);
+	print_match("match-set", "", &info->match_set);
 	if (info->match_set.flags & IPSET_RETURN_NOMATCH)
 		printf(" return-nomatch");
 }
@@ -264,7 +265,7 @@ set_save_v2(const void *ip, const struct xt_entry_match *match)
 {
 	const struct xt_set_info_match_v1 *info = (const void *)match->data;
 
-	print_match("--match-set", &info->match_set);
+	print_match("match-set", "--", &info->match_set);
 	if (info->match_set.flags & IPSET_RETURN_NOMATCH)
 		printf(" --return-nomatch");
 }
@@ -421,10 +422,10 @@ set_printv3_counter(const struct ip_set_counter_match0 *c, const char *name,
 }
 
 static void
-set_print_v3_matchinfo(const struct xt_set_info_match_v3 *info,
-		       const char *opt, const char *sep)
+set_print_v3_matchinfo(const char *opt, const char *sep,
+		       const struct xt_set_info_match_v3 *info)
 {
-	print_match(opt, &info->match_set);
+	print_match(opt, sep, &info->match_set);
 	if (info->flags & IPSET_FLAG_RETURN_NOMATCH)
 		printf(" %sreturn-nomatch", sep);
 	if ((info->flags & IPSET_FLAG_SKIP_COUNTER_UPDATE))
@@ -441,7 +442,7 @@ set_print_v3(const void *ip, const struct xt_entry_match *match, int numeric)
 {
 	const struct xt_set_info_match_v3 *info = (const void *)match->data;
 
-	set_print_v3_matchinfo(info, "match-set", "");
+	set_print_v3_matchinfo("match-set", "", info);
 }
 
 static void
@@ -449,7 +450,7 @@ set_save_v3(const void *ip, const struct xt_entry_match *match)
 {
 	const struct xt_set_info_match_v3 *info = (const void *)match->data;
 
-	set_print_v3_matchinfo(info, "--match-set", "--");
+	set_print_v3_matchinfo("match-set", "--", info);
 }
 
 /* Revision 4 */
@@ -483,8 +484,8 @@ set_parse_v4(int c, char **argv, int invert, unsigned int *flags,
 }
 
 static void
-set_print_v4_matchinfo(const struct xt_set_info_match_v4 *info,
-		       const char *opt, const char *sep)
+set_print_v4_matchinfo(const char *opt, const char *sep,
+		       const struct xt_set_info_match_v4 *info)
 {
 	const struct xt_set_info_match_v3 info3 = {
 		.match_set = info->match_set,
@@ -499,7 +500,7 @@ set_print_v4_matchinfo(const struct xt_set_info_match_v4 *info,
 		.flags = info->flags,
 	};
 
-	set_print_v3_matchinfo(&info3, opt, sep);
+	set_print_v3_matchinfo(opt, sep, &info3);
 }
 
 /* Prints out the matchinfo. */
@@ -508,7 +509,7 @@ set_print_v4(const void *ip, const struct xt_entry_match *match, int numeric)
 {
 	const struct xt_set_info_match_v4 *info = (const void *)match->data;
 
-	set_print_v4_matchinfo(info, "match-set", "");
+	set_print_v4_matchinfo("match-set", "", info);
 }
 
 static void
@@ -516,7 +517,7 @@ set_save_v4(const void *ip, const struct xt_entry_match *match)
 {
 	const struct xt_set_info_match_v4 *info = (const void *)match->data;
 
-	set_print_v4_matchinfo(info, "--match-set", "--");
+	set_print_v4_matchinfo("match-set", "--", info);
 }
 
 static struct xtables_match set_mt_reg[] = {
